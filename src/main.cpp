@@ -13,7 +13,7 @@ using namespace lyra;
 
 static void printHelp(const char* prog) {
     std::cout <<
-R"(Lyra 2 - A programmable music language
+R"(Lyra 3 - A programmable music language
 
 Usage:
   )" << prog << R"( <file.lyra> [output]        Run a song, like: python main.py
@@ -24,9 +24,9 @@ Usage:
   )" << prog << R"( init [file.lyra]             Create a starter song
 
 Options:
-  -f, --format wav|midi     Output format (default: wav)
+  -f, --format <format>     wav, midi, aiff, json, flac, mp3, ogg (default: wav)
   -r, --rate <Hz>           Sample rate: 44100, 48000, or 96000
-  -b, --bits 8|16|24        Bit depth for WAV
+  -b, --bits 8|16|24        PCM bit depth for WAV and AIFF
   -w, --wave <type>         Default waveform
   -s, --sound <mode>        Sound era/style (see list below)
   -v, --version             Show Lyra version
@@ -46,7 +46,9 @@ Examples:
   )" << prog << R"( expand main.lyra
   )" << prog << R"( init main.lyra
   )" << prog << R"( -f midi main.lyra
-  )" << prog << R"( -r 22050 -w square song.lyra out.wav
+  )" << prog << R"( -f json main.lyra
+  )" << prog << R"( -f flac main.lyra
+  )" << prog << R"( -r 44100 -w square song.lyra out.wav
 )";
 }
 
@@ -139,8 +141,12 @@ song MyFirstSong {
             return 0;
         }
         else if ((arg == "-f" || arg == "--format") && i + 1 < argc) {
-            std::string f = toLower(argv[++i]);
-            cfg.format = (f == "midi" || f == "mid") ? ExportFormat::MIDI : ExportFormat::WAV;
+            try {
+                cfg.format = parseExportFormat(argv[++i]);
+            } catch (const std::exception& error) {
+                std::cerr << "Error: " << error.what() << '\n';
+                return 1;
+            }
         }
         else if ((arg == "-r" || arg == "--rate") && i + 1 < argc) {
             cfg.sampleRate = std::stoi(argv[++i]);
@@ -184,7 +190,7 @@ song MyFirstSong {
         std::string base = (pos == std::string::npos) ? inputFile : inputFile.substr(pos + 1);
         size_t dot = base.find_last_of('.');
         if (dot != std::string::npos) base = base.substr(0, dot);
-        outputFile = base + (cfg.format == ExportFormat::MIDI ? ".mid" : ".wav");
+        outputFile = base + exportFormatExtension(cfg.format);
     }
 
     try {
@@ -227,7 +233,7 @@ song MyFirstSong {
                   << " | sound=" << soundModeToString(parser.config.soundMode)
                   << " | " << parser.config.sampleRate << "Hz/" << parser.config.bits << "bit/"
                   << parser.config.channels << "ch"
-                  << " | format=" << (cfg.format == ExportFormat::MIDI ? "MIDI" : "WAV")
+                  << " | format=" << exportFormatToString(cfg.format)
                   << std::endl;
 
         if (command == Command::Check) {
@@ -237,14 +243,22 @@ song MyFirstSong {
 
         if (cfg.format == ExportFormat::MIDI) {
             writeMidi(outputFile, parser.events, parser.config);
-            std::cout << "Created: " << outputFile << std::endl;
+        } else if (cfg.format == ExportFormat::JSON) {
+            writeJson(outputFile, parser.events, parser.config);
         } else {
             auto audio = generateSamples(parser.events, parser.config);
-            writeWav(outputFile, audio, parser.config);
+            if (cfg.format == ExportFormat::WAV)
+                writeWav(outputFile, audio, parser.config);
+            else if (cfg.format == ExportFormat::AIFF)
+                writeAiff(outputFile, audio, parser.config);
+            else
+                writeCompressedAudio(outputFile, audio, parser.config, cfg.format);
             double sec = audio.samples.size()
                        / static_cast<double>(parser.config.sampleRate * audio.channels);
             std::cout << "Created: " << outputFile << " (" << sec << "s)" << std::endl;
+            return 0;
         }
+        std::cout << "Created: " << outputFile << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;

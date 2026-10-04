@@ -1,6 +1,11 @@
 #include "export.hpp"
 #include <fstream>
 #include <cmath>
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 namespace lyra {
 
@@ -82,6 +87,245 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
         out.write(reinterpret_cast<const char*>(&infoSize), 4);
         out.write(reinterpret_cast<const char*>(info.data()), info.size());
     }
+}
+
+namespace {
+
+void writeBE16(std::ostream& out, uint16_t value) {
+    uint8_t bytes[2] = {uint8_t(value >> 8), uint8_t(value)};
+    out.write(reinterpret_cast<const char*>(bytes), 2);
+}
+
+void writeBE32(std::ostream& out, uint32_t value) {
+    uint8_t bytes[4] = {
+        uint8_t(value >> 24), uint8_t(value >> 16), uint8_t(value >> 8), uint8_t(value)
+    };
+    out.write(reinterpret_cast<const char*>(bytes), 4);
+}
+
+void writeBE64(std::ostream& out, uint64_t value) {
+    uint8_t bytes[8] = {
+        uint8_t(value >> 56), uint8_t(value >> 48), uint8_t(value >> 40), uint8_t(value >> 32),
+        uint8_t(value >> 24), uint8_t(value >> 16), uint8_t(value >> 8), uint8_t(value)
+    };
+    out.write(reinterpret_cast<const char*>(bytes), 8);
+}
+
+void writeExtended80(std::ostream& out, double value) {
+    if (value <= 0.0) {
+        for (int i = 0; i < 10; ++i) out.put(0);
+        return;
+    }
+    int exponent = 0;
+    long double fraction = std::frexp(static_cast<long double>(value), &exponent);
+    uint16_t biasedExponent = static_cast<uint16_t>(exponent + 16382);
+    long double normalized = fraction * 2.0L;
+    uint64_t mantissa = static_cast<uint64_t>(std::ldexp(normalized, 63));
+    writeBE16(out, biasedExponent);
+    writeBE64(out, mantissa);
+}
+
+std::string jsonEscape(const std::string& value) {
+    std::ostringstream escaped;
+    for (unsigned char c : value) {
+        switch (c) {
+            case '"': escaped << "\\\""; break;
+            case '\\': escaped << "\\\\"; break;
+            case '\b': escaped << "\\b"; break;
+            case '\f': escaped << "\\f"; break;
+            case '\n': escaped << "\\n"; break;
+            case '\r': escaped << "\\r"; break;
+            case '\t': escaped << "\\t"; break;
+            default:
+                if (c < 0x20)
+                    escaped << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                            << static_cast<int>(c) << std::dec;
+                else
+                    escaped << static_cast<char>(c);
+        }
+    }
+    return escaped.str();
+}
+
+const char* instrumentName(InstrumentType instrument) {
+    switch (instrument) {
+        case InstrumentType::Wave: return "wave";
+        case InstrumentType::Piano: return "piano";
+        case InstrumentType::ElectricPiano: return "electric_piano";
+        case InstrumentType::Organ: return "organ";
+        case InstrumentType::MusicBox: return "music_box";
+        case InstrumentType::Glockenspiel: return "glockenspiel";
+        case InstrumentType::Strings: return "strings";
+        case InstrumentType::Brass: return "brass";
+        case InstrumentType::Flute: return "flute";
+        case InstrumentType::Guitar: return "guitar";
+        case InstrumentType::ElectricGuitar: return "electric_guitar";
+        case InstrumentType::SynthBass: return "synth_bass";
+    }
+    return "wave";
+}
+
+const char* drumName(DrumType drum) {
+    switch (drum) {
+        case DrumType::None: return "none";
+        case DrumType::Kick: return "kick";
+        case DrumType::Snare: return "snare";
+        case DrumType::Hihat: return "hihat";
+        case DrumType::OpenHihat: return "open_hihat";
+        case DrumType::TomLow: return "tom_low";
+        case DrumType::TomMid: return "tom_mid";
+        case DrumType::TomHigh: return "tom_high";
+        case DrumType::Clap: return "clap";
+        case DrumType::Rimshot: return "rimshot";
+        case DrumType::Crash: return "crash";
+        case DrumType::Ride: return "ride";
+        case DrumType::Cowbell: return "cowbell";
+        case DrumType::Shaker: return "shaker";
+        case DrumType::Tambourine: return "tambourine";
+        case DrumType::Timpani: return "timpani";
+        case DrumType::Impact: return "impact";
+    }
+    return "none";
+}
+
+const char* drumKitName(DrumKit kit) {
+    switch (kit) {
+        case DrumKit::Standard: return "standard";
+        case DrumKit::Rock: return "rock";
+        case DrumKit::Electronic: return "electronic";
+        case DrumKit::Retro: return "retro";
+        case DrumKit::Orchestral: return "orchestral";
+    }
+    return "standard";
+}
+
+std::string shellQuote(const std::string& value) {
+#ifdef _WIN32
+    if (value.find_first_of("\"\r\n%!") != std::string::npos)
+        throw std::runtime_error("FFmpeg export does not support quotes, newlines, %, or ! in paths");
+    return "\"" + value + "\"";
+#else
+    std::string quoted = "'";
+    for (char c : value) quoted += c == '\'' ? "'\\''" : std::string(1, c);
+    return quoted + "'";
+#endif
+}
+
+} // namespace
+
+void writeAiff(const std::string& filename, const AudioBuffer& audio, const Config& cfg) {
+    std::ofstream out(filename, std::ios::binary);
+    if (!out) throw std::runtime_error("Cannot create AIFF file: " + filename);
+
+    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24) ? static_cast<uint16_t>(cfg.bits) : 16;
+    uint16_t channels = static_cast<uint16_t>(audio.channels);
+    uint32_t frames = static_cast<uint32_t>(audio.samples.size() / std::max(1, audio.channels));
+    uint32_t dataSize = static_cast<uint32_t>(audio.samples.size() * (bits / 8));
+    uint32_t soundChunkSize = 8 + dataSize;
+    uint32_t formSize = 4 + (8 + 18) + (8 + soundChunkSize + (soundChunkSize & 1));
+
+    out.write("FORM", 4);
+    writeBE32(out, formSize);
+    out.write("AIFF", 4);
+    out.write("COMM", 4);
+    writeBE32(out, 18);
+    writeBE16(out, channels);
+    writeBE32(out, frames);
+    writeBE16(out, bits);
+    writeExtended80(out, cfg.sampleRate);
+    out.write("SSND", 4);
+    writeBE32(out, soundChunkSize);
+    writeBE32(out, 0);
+    writeBE32(out, 0);
+
+    for (float sample : audio.samples) {
+        double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
+        if (bits == 8) {
+            int8_t value = static_cast<int8_t>(std::lround(clamped * 127.0));
+            out.write(reinterpret_cast<const char*>(&value), 1);
+        } else if (bits == 16) {
+            int32_t value = static_cast<int32_t>(std::lround(clamped * 32767.0));
+            writeBE16(out, static_cast<uint16_t>(static_cast<int16_t>(value)));
+        } else {
+            int32_t value = static_cast<int32_t>(std::lround(clamped * 8388607.0));
+            uint8_t bytes[3] = {
+                static_cast<uint8_t>((value >> 16) & 0xFF),
+                static_cast<uint8_t>((value >> 8) & 0xFF),
+                static_cast<uint8_t>(value & 0xFF)
+            };
+            out.write(reinterpret_cast<const char*>(bytes), 3);
+        }
+    }
+    if (soundChunkSize & 1) out.put(0);
+}
+
+void writeJson(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+    std::ofstream out(filename);
+    if (!out) throw std::runtime_error("Cannot create JSON file: " + filename);
+    out << std::setprecision(15);
+    out << "{\n"
+        << "  \"format\": \"lyra-events-v1\",\n"
+        << "  \"tempo\": " << cfg.tempo << ",\n"
+        << "  \"time_signature\": [" << cfg.timeNumerator << ", " << cfg.timeDenominator << "],\n"
+        << "  \"key\": {\"root\": " << cfg.keyRoot << ", \"mode\": \""
+        << (cfg.keyMinor ? "minor" : "major") << "\"},\n"
+        << "  \"sound\": \"" << soundModeToString(cfg.soundMode) << "\",\n"
+        << "  \"sample_rate\": " << cfg.sampleRate << ",\n"
+        << "  \"bit_depth\": " << cfg.bits << ",\n"
+        << "  \"channels\": " << cfg.channels << ",\n"
+        << "  \"metadata\": {\"title\": \"" << jsonEscape(cfg.title)
+        << "\", \"artist\": \"" << jsonEscape(cfg.artist)
+        << "\", \"album\": \"" << jsonEscape(cfg.album) << "\"},\n"
+        << "  \"events\": [\n";
+    for (size_t i = 0; i < events.size(); ++i) {
+        const auto& event = events[i];
+        out << "    {\"start_beat\": " << event.startBeat
+            << ", \"duration_beats\": " << event.durationBeats
+            << ", \"frequencies_hz\": [";
+        for (size_t f = 0; f < event.freqs.size(); ++f) {
+            if (f) out << ", ";
+            out << event.freqs[f];
+        }
+        out << "], \"volume\": " << event.volume
+            << ", \"wave\": \"" << waveToString(event.wave)
+            << "\", \"instrument\": \"" << instrumentName(event.instrument)
+            << "\", \"drum\": \"" << drumName(event.drum)
+            << "\", \"drum_kit\": \"" << drumKitName(event.drumKit)
+            << "\", \"pan\": " << event.pan
+            << ", \"attack\": " << event.attack
+            << ", \"release\": " << event.release
+            << ", \"cutoff\": " << event.cutoff
+            << ", \"drive\": " << event.drive << "}";
+        if (i + 1 != events.size()) out << ',';
+        out << '\n';
+    }
+    out << "  ]\n}\n";
+}
+
+void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
+                          const Config& cfg, ExportFormat format) {
+    if (format != ExportFormat::FLAC && format != ExportFormat::MP3 && format != ExportFormat::OGG)
+        throw std::runtime_error("Compressed exporter received a non-compressed format");
+
+    auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::filesystem::path temporary = std::filesystem::path(filename).string()
+        + ".lyra-" + std::to_string(stamp) + ".wav";
+    std::string temporaryArgument = shellQuote(temporary.string());
+    std::string outputArgument = shellQuote(filename);
+    writeWav(temporary.string(), audio, cfg);
+
+    std::string codec;
+    if (format == ExportFormat::FLAC) codec = "-c:a flac";
+    else if (format == ExportFormat::MP3) codec = "-c:a libmp3lame -q:a 2";
+    else codec = "-c:a libvorbis -q:a 6";
+
+    std::string command = "ffmpeg -nostdin -hide_banner -loglevel error -y -i "
+        + temporaryArgument + " " + codec + " " + outputArgument;
+    int result = std::system(command.c_str());
+    std::error_code removeError;
+    std::filesystem::remove(temporary, removeError);
+    if (result != 0)
+        throw std::runtime_error("FFmpeg export failed. Install FFmpeg and ensure `ffmpeg` is available in PATH");
 }
 
 void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
