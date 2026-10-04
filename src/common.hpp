@@ -93,6 +93,10 @@ struct NoteEvent {
     DrumType drum = DrumType::None;
     DrumKit drumKit = DrumKit::Standard;
     double pan = 0.0;
+    double attack = -1.0;
+    double release = -1.0;
+    double cutoff = 0.0;
+    double drive = 0.0;
 };
 
 struct AudioBuffer {
@@ -117,6 +121,10 @@ struct Config {
     std::string title;
     std::string artist;
     std::string album;
+    int timeNumerator = 4;
+    int timeDenominator = 4;
+    int keyRoot = 0;
+    bool keyMinor = false;
     int sampleRate = DEFAULT_SAMPLE_RATE;
     int bits = 16;
     ExportFormat format = ExportFormat::WAV;
@@ -284,6 +292,46 @@ inline double noteToFreq(const std::string& name) {
 
     int midi = (octave + 1) * 12 + it->second;
     return 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+}
+
+inline int pitchClass(const std::string& name) {
+    static const std::map<std::string, int> pitches = {
+        {"c",0},{"c#",1},{"db",1},{"d",2},{"d#",3},{"eb",3},
+        {"e",4},{"f",5},{"f#",6},{"gb",6},{"g",7},{"g#",8},
+        {"ab",8},{"a",9},{"a#",10},{"bb",10},{"b",11}
+    };
+    auto it = pitches.find(toLower(name));
+    if (it == pitches.end()) throw std::runtime_error("Unknown pitch class: " + name);
+    return it->second;
+}
+
+inline std::vector<double> chordSymbolToFreqs(const std::string& symbol, int octave) {
+    if (symbol.empty()) throw std::runtime_error("Empty chord symbol");
+    size_t split = 1;
+    if (symbol.size() > 1 && (symbol[1] == '#' || symbol[1] == 'b')) split = 2;
+    int root = pitchClass(symbol.substr(0, split));
+    std::string quality = toLower(symbol.substr(split));
+    std::vector<int> intervals;
+    if (quality.empty() || quality == "maj" || quality == "major") intervals = {0,4,7};
+    else if (quality == "m" || quality == "min" || quality == "minor") intervals = {0,3,7};
+    else if (quality == "7") intervals = {0,4,7,10};
+    else if (quality == "maj7") intervals = {0,4,7,11};
+    else if (quality == "m7" || quality == "min7") intervals = {0,3,7,10};
+    else if (quality == "dim") intervals = {0,3,6};
+    else if (quality == "dim7") intervals = {0,3,6,9};
+    else if (quality == "aug" || quality == "+") intervals = {0,4,8};
+    else if (quality == "sus2") intervals = {0,2,7};
+    else if (quality == "sus4" || quality == "sus") intervals = {0,5,7};
+    else if (quality == "5") intervals = {0,7};
+    else throw std::runtime_error("Unknown chord quality: " + symbol);
+
+    int rootMidi = (octave + 1) * 12 + root;
+    std::vector<double> freqs;
+    for (int interval : intervals) {
+        int midi = rootMidi + interval;
+        freqs.push_back(440.0 * std::pow(2.0, (midi - 69) / 12.0));
+    }
+    return freqs;
 }
 
 } // namespace lyra

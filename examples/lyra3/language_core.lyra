@@ -1,0 +1,62 @@
+# Lyra 3 core-language preview: mutable collections, indexing, return values,
+# while, break and continue — all producing real music.
+import "std/all.lyra"
+
+const BPM = 112
+const STEP = 0.25
+let notes = [C5, E5, G5]
+push notes, B5
+set notes[0] = D5
+
+function twice(value) {
+  return value * 2
+}
+
+function louder(base, bonus) {
+  return base + bonus
+}
+
+let cursor = 0
+let degree_cursor = 0
+
+song LanguageCore {
+  tempo $BPM
+  time 4/4
+  key D minor
+  sound chiptune_modern
+  use effect StreamingRelease
+  title "Lyra 3 Language Core"
+  artist "Lyra Demo"
+
+  track indexed_notes uses BrightLead {
+    while cursor < len(notes) {
+      note $notes[$cursor] ${twice(STEP)} velocity ${louder(55, 15)}
+      set cursor = cursor + 1
+    }
+
+    for pitch in notes {
+      note $pitch $STEP
+    }
+  }
+
+  track controlled_scale uses SoftPiano {
+    while degree_cursor < 8 {
+      set degree_cursor = degree_cursor + 1
+      if degree_cursor == 2 {
+        continue
+      }
+      if degree_cursor > 5 {
+        break
+      }
+      degree $degree_cursor 4 0.5
+    }
+    harmony Dm7 3 2
+  }
+
+  track drums {
+    drumkit electronic
+    repeat 4 {
+      play four_on_floor(0.5)
+    }
+  }
+}

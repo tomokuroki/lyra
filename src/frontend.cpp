@@ -9,6 +9,9 @@
 namespace lyra {
 namespace {
 
+struct BreakSignal {};
+struct ContinueSignal {};
+
 std::string stripComment(const std::string& input) {
     bool quoted = false;
     for (size_t i = 0; i < input.size(); ++i) {
@@ -232,9 +235,16 @@ std::string applyTranspose(const std::string& line, int semitones) {
 } // namespace
 
 std::string Frontend::processFile(const std::string& filename) {
-    variables_.clear(); constants_.clear(); patterns_.clear(); functions_.clear();
+    variables_.clear(); lists_.clear(); constants_.clear(); patterns_.clear(); functions_.clear(); scalarFunctions_.clear();
     instruments_.clear(); effects_.clear(); importStack_.clear(); imported_.clear();
-    std::vector<std::string> output = processPath(std::filesystem::absolute(filename));
+    std::vector<std::string> output;
+    try {
+        output = processPath(std::filesystem::absolute(filename));
+    } catch (const BreakSignal&) {
+        throw std::runtime_error("break used outside a Lyra 3 loop");
+    } catch (const ContinueSignal&) {
+        throw std::runtime_error("continue used outside a Lyra 3 loop");
+    }
     std::ostringstream joined;
     for (const auto& line : output) joined << line << '\n';
     return joined.str();
@@ -256,9 +266,81 @@ std::vector<std::string> Frontend::processPath(const std::filesystem::path& rawP
             lines.push_back("else {");
         } else lines.push_back(line);
     }
-    auto output = expand(lines, path.parent_path());
+    std::vector<std::string> output;
+    try {
+        output = expand(lines, path.parent_path());
+    } catch (const std::runtime_error& error) {
+        importStack_.erase(path);
+        throw std::runtime_error(path.string() + ": " + error.what());
+    }
     importStack_.erase(path);
     return output;
+}
+
+std::string Frontend::resolveListAccess(std::string text,
+                                        const std::map<std::string, std::string>& values) const {
+    std::regex access(R"(\$([A-Za-z_]\w*)\[([^\]]+)\])");
+    std::smatch match;
+    while (std::regex_search(text, match, access)) {
+        auto list = lists_.find(match[1].str());
+        if (list == lists_.end()) throw std::runtime_error("Unknown list: " + match[1].str());
+        std::string indexExpr = substitute(match[2].str(), values);
+        int index = static_cast<int>(std::lround(Expression(indexExpr, values).parse()));
+        if (index < 0) index += static_cast<int>(list->second.size());
+        if (index < 0 || static_cast<size_t>(index) >= list->second.size())
+            throw std::runtime_error("List index out of range: " + match[1].str());
+        text.replace(match.position(), match.length(), list->second[static_cast<size_t>(index)]);
+    }
+    return text;
+}
+
+std::string Frontend::resolveScalarCalls(std::string text,
+                                         const std::map<std::string, std::string>& values,
+                                         int depth) const {
+    if (depth > 32) throw std::runtime_error("Function recursion limit exceeded");
+    std::regex lengthCall(R"(len\s*\(\s*([A-Za-z_]\w*)\s*\))", std::regex::icase);
+    std::smatch lengthMatch;
+    while (std::regex_search(text, lengthMatch, lengthCall)) {
+        auto list = lists_.find(lengthMatch[1].str());
+        if (list == lists_.end()) throw std::runtime_error("len() expects a list: " + lengthMatch[1].str());
+        text.replace(lengthMatch.position(), lengthMatch.length(), std::to_string(list->second.size()));
+    }
+    bool replaced = true;
+    while (replaced) {
+        replaced = false;
+        for (const auto& entry : scalarFunctions_) {
+            const std::string needle = entry.first + "(";
+            size_t pos = text.find(needle);
+            if (pos == std::string::npos || (pos > 0 &&
+                (std::isalnum(static_cast<unsigned char>(text[pos - 1])) || text[pos - 1] == '_'))) continue;
+            size_t cursor = pos + needle.size();
+            int parenDepth = 1;
+            for (; cursor < text.size() && parenDepth > 0; ++cursor) {
+                if (text[cursor] == '(') ++parenDepth;
+                else if (text[cursor] == ')') --parenDepth;
+            }
+            if (parenDepth != 0) throw std::runtime_error("Unclosed function call: " + entry.first);
+            size_t close = cursor - 1;
+            auto args = splitComma(text.substr(pos + needle.size(), close - (pos + needle.size())));
+            if (args.size() != entry.second.params.size())
+                throw std::runtime_error("Wrong argument count for function: " + entry.first);
+            auto functionValues = values;
+            for (size_t i = 0; i < args.size(); ++i) {
+                std::string arg = resolveListAccess(args[i], values);
+                arg = resolveScalarCalls(arg, values, depth + 1);
+                arg = substitute(arg, values);
+                functionValues[entry.second.params[i]] = numberText(Expression(arg, values).parse());
+            }
+            std::string expression = resolveListAccess(entry.second.expression, functionValues);
+            expression = substitute(expression, functionValues);
+            expression = resolveScalarCalls(expression, functionValues, depth + 1);
+            std::string result = numberText(Expression(expression, functionValues).parse());
+            text.replace(pos, close - pos + 1, result);
+            replaced = true;
+            break;
+        }
+    }
+    return text;
 }
 
 std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
@@ -268,10 +350,18 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
     std::vector<std::string> output;
     auto values = variables_;
     values.insert(locals.begin(), locals.end());
+    auto resolve = [&](std::string text) {
+        text = resolveListAccess(std::move(text), values);
+        text = resolveScalarCalls(std::move(text), values);
+        return substitute(std::move(text), values);
+    };
 
     for (size_t i = 0; i < lines.size(); ++i) {
         std::string line = stripComment(lines[i]);
         if (line.empty()) continue;
+
+        if (toLower(line) == "break") throw BreakSignal{};
+        if (toLower(line) == "continue") throw ContinueSignal{};
 
         std::smatch match;
         if (std::regex_match(line, match, std::regex(R"(^import\s+[\"]([^\"]+)[\"]\s*$)", std::regex::icase))) {
@@ -301,6 +391,52 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             continue;
         }
 
+        if (std::regex_match(line, match, std::regex(R"(^(let|const)\s+([A-Za-z_]\w*)\s*=\s*\[(.*)\]\s*$)", std::regex::icase))) {
+            std::string name = match[2].str();
+            if (variables_.count(name) || lists_.count(name))
+                throw std::runtime_error("Variable already defined: " + name);
+            std::vector<std::string> items;
+            for (const auto& item : splitComma(match[3].str()))
+                items.push_back(resolve(item));
+            lists_[name] = items;
+            if (toLower(match[1].str()) == "const") constants_.insert(name);
+            continue;
+        }
+
+        if (std::regex_match(line, match, std::regex(R"(^set\s+([A-Za-z_]\w*)\[([^\]]+)\]\s*=\s*(.+)$)", std::regex::icase))) {
+            std::string name = match[1].str();
+            if (constants_.count(name)) throw std::runtime_error("Cannot change const list: " + name);
+            auto list = lists_.find(name);
+            if (list == lists_.end()) throw std::runtime_error("Unknown list: " + name);
+            int index = static_cast<int>(std::lround(Expression(resolve(match[2].str()), values).parse()));
+            if (index < 0) index += static_cast<int>(list->second.size());
+            if (index < 0 || static_cast<size_t>(index) >= list->second.size()) throw std::runtime_error("List index out of range: " + name);
+            list->second[static_cast<size_t>(index)] = resolve(match[3].str());
+            continue;
+        }
+
+        if (std::regex_match(line, match, std::regex(R"(^(push|remove|pop)\s+([A-Za-z_]\w*)(?:\s*,?\s*(.*))?$)", std::regex::icase))) {
+            std::string operation = toLower(match[1].str());
+            std::string name = match[2].str();
+            if (constants_.count(name)) throw std::runtime_error("Cannot change const list: " + name);
+            auto list = lists_.find(name);
+            if (list == lists_.end()) throw std::runtime_error("Unknown list: " + name);
+            if (operation == "push") {
+                if (!match[3].matched || trim(match[3].str()).empty()) throw std::runtime_error("push requires a value");
+                list->second.push_back(resolve(match[3].str()));
+            } else if (operation == "pop") {
+                if (list->second.empty()) throw std::runtime_error("Cannot pop an empty list: " + name);
+                list->second.pop_back();
+            } else {
+                if (!match[3].matched) throw std::runtime_error("remove requires an index");
+                int index = static_cast<int>(std::lround(Expression(resolve(match[3].str()), values).parse()));
+                if (index < 0) index += static_cast<int>(list->second.size());
+                if (index < 0 || static_cast<size_t>(index) >= list->second.size()) throw std::runtime_error("List index out of range: " + name);
+                list->second.erase(list->second.begin() + index);
+            }
+            continue;
+        }
+
         if (std::regex_match(line, match, std::regex(R"(^(let|const|set)\s+([A-Za-z_]\w*)\s*=\s*(.+)$)", std::regex::icase))) {
             std::string kind = toLower(match[1].str());
             std::string name = match[2].str();
@@ -310,7 +446,7 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             std::string value;
             if (valueText.size() >= 2 && valueText.front() == '"' && valueText.back() == '"')
                 value = valueText.substr(1, valueText.size() - 2);
-            else value = numberText(Expression(substitute(valueText, values), values).parse());
+            else value = numberText(Expression(resolve(valueText), values).parse());
             variables_[name] = value;
             if (kind == "const") constants_.insert(name);
             values[name] = value;
@@ -339,7 +475,21 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             Macro macro;
             for (const auto& param : splitComma(match[3].str())) if (!param.empty()) macro.params.push_back(param);
             macro.body = block.first;
-            (toLower(match[1].str()) == "pattern" ? patterns_ : functions_)[match[2].str()] = macro;
+            std::string kind = toLower(match[1].str());
+            if (kind == "function") {
+                std::vector<std::string> meaningful;
+                for (const auto& bodyLine : block.first) {
+                    std::string clean = stripComment(bodyLine);
+                    if (!clean.empty()) meaningful.push_back(clean);
+                }
+                std::smatch returnMatch;
+                if (meaningful.size() == 1 && std::regex_match(meaningful[0], returnMatch,
+                    std::regex(R"(^return\s+(.+)$)", std::regex::icase))) {
+                    scalarFunctions_[match[2].str()] = ScalarFunction{macro.params, returnMatch[1].str()};
+                    continue;
+                }
+            }
+            (kind == "pattern" ? patterns_ : functions_)[match[2].str()] = macro;
             continue;
         }
 
@@ -362,7 +512,7 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
                 falseBlock = collectedElse.first;
                 i = collectedElse.second;
             }
-            bool condition = Expression(substitute(match[1].str(), values), values).parse() != 0.0;
+            bool condition = Expression(resolve(match[1].str()), values).parse() != 0.0;
             const auto& selected = condition ? trueBlock.first : falseBlock;
             if (!selected.empty()) {
                 auto expanded = expand(selected, baseDir, locals, transpose);
@@ -371,9 +521,72 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             continue;
         }
 
+        if (std::regex_match(line, match, std::regex(R"(^for\s+([A-Za-z_]\w*)\s+in\s+(.+)\s*\{$)", std::regex::icase))) {
+            auto block = collectBlock(lines, i); i = block.second;
+            std::string iterator = match[1].str();
+            std::string source = trim(match[2].str());
+            std::vector<std::string> items;
+            std::smatch rangeMatch;
+            if (std::regex_match(source, rangeMatch, std::regex(R"(^range\s*\((.*)\)$)", std::regex::icase))) {
+                auto args = splitComma(rangeMatch[1].str());
+                if (args.size() < 2 || args.size() > 3)
+                    throw std::runtime_error("range requires start, end, and optional step");
+                double startValue = Expression(resolve(args[0]), values).parse();
+                double endValue = Expression(resolve(args[1]), values).parse();
+                double stepValue = args.size() == 3
+                    ? Expression(resolve(args[2]), values).parse() : 1.0;
+                if (stepValue == 0.0) throw std::runtime_error("range step cannot be zero");
+                if (stepValue > 0.0) {
+                    for (double value = startValue; value < endValue; value += stepValue)
+                        items.push_back(numberText(value));
+                } else {
+                    for (double value = startValue; value > endValue; value += stepValue)
+                        items.push_back(numberText(value));
+                }
+            } else {
+                auto list = lists_.find(source);
+                if (list == lists_.end()) throw std::runtime_error("Unknown list in for: " + source);
+                items = list->second;
+            }
+            for (const auto& item : items) {
+                auto loopLocals = locals;
+                loopLocals[iterator] = item;
+                try {
+                    auto expanded = expand(block.first, baseDir, loopLocals, transpose);
+                    output.insert(output.end(), expanded.begin(), expanded.end());
+                } catch (const ContinueSignal&) {
+                    continue;
+                } catch (const BreakSignal&) {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if (std::regex_match(line, match, std::regex(R"(^while\s+(.+)\s*\{$)", std::regex::icase))) {
+            auto block = collectBlock(lines, i); i = block.second;
+            std::string condition = match[1].str();
+            size_t iterations = 0;
+            while (true) {
+                values = variables_;
+                values.insert(locals.begin(), locals.end());
+                if (Expression(resolve(condition), values).parse() == 0.0) break;
+                if (++iterations > 10000) throw std::runtime_error("while loop exceeded 10000 iterations");
+                try {
+                    auto expanded = expand(block.first, baseDir, locals, transpose);
+                    output.insert(output.end(), expanded.begin(), expanded.end());
+                } catch (const ContinueSignal&) {
+                    continue;
+                } catch (const BreakSignal&) {
+                    break;
+                }
+            }
+            continue;
+        }
+
         if (std::regex_match(line, match, std::regex(R"(^transpose\s+(.+)\s*\{$)", std::regex::icase))) {
             auto block = collectBlock(lines, i); i = block.second;
-            int amount = static_cast<int>(std::lround(Expression(substitute(match[1].str(), values), values).parse()));
+            int amount = static_cast<int>(std::lround(Expression(resolve(match[1].str()), values).parse()));
             auto expanded = expand(block.first, baseDir, locals, transpose + amount);
             output.insert(output.end(), expanded.begin(), expanded.end());
             continue;
@@ -381,12 +594,18 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
 
         if (std::regex_match(line, match, std::regex(R"(^repeat\s+(.+)\s*\{$)", std::regex::icase))) {
             auto block = collectBlock(lines, i); i = block.second;
-            int count = static_cast<int>(std::lround(Expression(substitute(match[1].str(), values), values).parse()));
+            int count = static_cast<int>(std::lround(Expression(resolve(match[1].str()), values).parse()));
             if (count <= 0) throw std::runtime_error("repeat count must be > 0");
-            output.push_back("loop " + std::to_string(count) + " {");
-            auto expanded = expand(block.first, baseDir, locals, transpose);
-            output.insert(output.end(), expanded.begin(), expanded.end());
-            output.push_back("}");
+            for (int iteration = 0; iteration < count; ++iteration) {
+                try {
+                    auto expanded = expand(block.first, baseDir, locals, transpose);
+                    output.insert(output.end(), expanded.begin(), expanded.end());
+                } catch (const ContinueSignal&) {
+                    continue;
+                } catch (const BreakSignal&) {
+                    break;
+                }
+            }
             continue;
         }
 
@@ -424,7 +643,7 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             if (args.size() != macroIt->second.params.size()) throw std::runtime_error("Wrong argument count for: " + match[2].str());
             std::map<std::string, std::string> macroLocals = locals;
             for (size_t p = 0; p < args.size(); ++p)
-                macroLocals[macroIt->second.params[p]] = substitute(args[p], values);
+                macroLocals[macroIt->second.params[p]] = resolve(args[p]);
             auto expanded = expand(macroIt->second.body, baseDir, macroLocals, transpose);
             output.insert(output.end(), expanded.begin(), expanded.end());
             continue;
@@ -433,14 +652,14 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
         // Existing loop blocks may contain Lyra 2 constructs, so process their body too.
         if (std::regex_match(line, match, std::regex(R"(^loop\s+(.+)\s*\{$)", std::regex::icase))) {
             auto block = collectBlock(lines, i); i = block.second;
-            output.push_back(applyTranspose(substitute(line, values), transpose));
+            output.push_back(applyTranspose(resolve(line), transpose));
             auto expanded = expand(block.first, baseDir, locals, transpose);
             output.insert(output.end(), expanded.begin(), expanded.end());
             output.push_back("}");
             continue;
         }
 
-        output.push_back(applyTranspose(substitute(line, values), transpose));
+        output.push_back(applyTranspose(resolve(line), transpose));
     }
     return output;
 }

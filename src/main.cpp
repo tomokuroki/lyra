@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 
 using namespace lyra;
 
@@ -18,6 +19,7 @@ Usage:
   )" << prog << R"( <file.lyra> [output]        Run a song, like: python main.py
   )" << prog << R"( run <file.lyra> [output]    Explicit run command
   )" << prog << R"( check <file.lyra>            Validate without rendering
+  )" << prog << R"( test <file-or-directory>      Check every discovered song
   )" << prog << R"( expand <file.lyra>           Show lowered Lyra commands
   )" << prog << R"( init [file.lyra]             Create a starter song
 
@@ -54,7 +56,7 @@ int main(int argc, char* argv[]) {
     Config cfg;
     std::string inputFile;
     std::string outputFile;
-    enum class Command { Run, Check, Expand };
+    enum class Command { Run, Check, Expand, Test };
     Command command = Command::Run;
     int firstArg = 1;
 
@@ -62,8 +64,11 @@ int main(int argc, char* argv[]) {
         std::string first = toLower(argv[1]);
         if (first == "run" || first == "render") {
             firstArg = 2;
-        } else if (first == "check") {
+        } else if (first == "check" || first == "lint") {
             command = Command::Check;
+            firstArg = 2;
+        } else if (first == "test") {
+            command = Command::Test;
             firstArg = 2;
         } else if (first == "expand") {
             command = Command::Expand;
@@ -85,18 +90,26 @@ import "std/all.lyra"
 
 const BPM = 120
 const STEP = 0.5
+const CHORDS = [Cmaj7, Am7, Fmaj7, G7]
 
 song MyFirstSong {
   tempo $BPM
+  time 4/4
+  key C major
   sound 16bit
   use effect StreamingRelease
   title "My Song"
   artist "My Artist Name"
 
   track piano uses SoftPiano {
-    repeat 2 {
-      play major_arp(C4, E4, G4, $STEP)
-      play major_arp(F4, A4, C5, $STEP)
+    for chord in CHORDS {
+      harmony $chord 3 2
+    }
+    transpose 12 {
+      for step in range(1, 8) {
+        degree $step 4 $STEP
+      }
+      rest $STEP
     }
   }
 
@@ -122,7 +135,7 @@ song MyFirstSong {
             return 0;
         }
         else if (arg == "-v" || arg == "--version") {
-            std::cout << "Lyra 2.0.0" << std::endl;
+            std::cout << "Lyra 3.0.0" << std::endl;
             return 0;
         }
         else if ((arg == "-f" || arg == "--format") && i + 1 < argc) {
@@ -175,6 +188,30 @@ song MyFirstSong {
     }
 
     try {
+        if (command == Command::Test) {
+            std::vector<std::filesystem::path> files;
+            std::filesystem::path target(inputFile);
+            if (std::filesystem::is_directory(target)) {
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(target))
+                    if (entry.is_regular_file() && entry.path().extension() == ".lyra") files.push_back(entry.path());
+            } else files.push_back(target);
+            std::sort(files.begin(), files.end());
+            int failed = 0;
+            for (const auto& file : files) {
+                try {
+                    Frontend testFrontend;
+                    Parser testParser;
+                    testParser.config = cfg;
+                    testParser.parse(testFrontend.processFile(file.string()));
+                    std::cout << "PASS " << file.string() << " (" << testParser.events.size() << " events)\n";
+                } catch (const std::exception& error) {
+                    ++failed;
+                    std::cout << "FAIL " << file.string() << ": " << error.what() << "\n";
+                }
+            }
+            std::cout << "Tests: " << files.size() - failed << " passed, " << failed << " failed\n";
+            return failed == 0 ? 0 : 1;
+        }
         Frontend frontend;
         Parser parser;
         parser.config = cfg;

@@ -105,6 +105,27 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
     track.push_back((usPerBeat >> 8) & 0xFF);
     track.push_back(usPerBeat & 0xFF);
 
+    // Time-signature and key-signature metadata keep exported MIDI aligned
+    // with the musical source instead of treating every song as C major 4/4.
+    int denominatorPower = 0;
+    for (int value = cfg.timeDenominator; value > 1; value >>= 1) ++denominatorPower;
+    track.insert(track.end(), {0x00, 0xFF, 0x58, 0x04,
+        static_cast<uint8_t>(cfg.timeNumerator), static_cast<uint8_t>(denominatorPower), 24, 8});
+    static const int majorSharps[] = {0,-5,2,-3,4,-1,6,1,-4,3,-2,5};
+    static const int minorSharps[] = {-3,4,-1,6,1,-4,3,-2,5,0,-5,2};
+    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[cfg.keyRoot];
+    track.insert(track.end(), {0x00, 0xFF, 0x59, 0x02,
+        static_cast<uint8_t>(static_cast<int8_t>(sharps)), static_cast<uint8_t>(cfg.keyMinor ? 1 : 0)});
+
+    auto appendMetaText = [&](uint8_t type, const std::string& value) {
+        if (value.empty()) return;
+        track.push_back(0x00); track.push_back(0xFF); track.push_back(type);
+        writeVar(static_cast<uint32_t>(value.size()));
+        track.insert(track.end(), value.begin(), value.end());
+    };
+    appendMetaText(0x03, cfg.title);
+    appendMetaText(0x01, cfg.artist);
+
     struct MidiMessage {
         uint32_t tick;
         int order;

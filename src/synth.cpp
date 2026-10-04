@@ -75,11 +75,11 @@ static double instrumentSample(const NoteEvent& ev, double phase, double t, doub
     return 0.0;
 }
 
-static double instrumentEnvelope(InstrumentType instrument, double t, double duration) {
+static double instrumentEnvelope(const NoteEvent& ev, double t, double duration) {
     double attack = 0.008;
     double release = 0.05;
     double sustain = 1.0;
-    switch (instrument) {
+    switch (ev.instrument) {
         case InstrumentType::Piano:         attack = 0.004; release = 0.14; sustain = 0.22 + 0.78 * std::exp(-t * 1.25); break;
         case InstrumentType::ElectricPiano: attack = 0.008; release = 0.16; sustain = 0.35 + 0.65 * std::exp(-t * 0.8); break;
         case InstrumentType::Organ:         attack = 0.015; release = 0.10; break;
@@ -93,6 +93,8 @@ static double instrumentEnvelope(InstrumentType instrument, double t, double dur
         case InstrumentType::SynthBass:     attack = 0.004; release = 0.07; sustain = 0.70 + 0.30 * std::exp(-t * 1.0); break;
         case InstrumentType::Wave: break;
     }
+    if (ev.attack >= 0.0) attack = ev.attack;
+    if (ev.release >= 0.0) release = ev.release;
     double env = sustain;
     if (t < attack) env *= t / attack;
     if (t > duration - release) env *= std::max(0.0, (duration - t) / release);
@@ -114,6 +116,9 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
     double panAngle = (ev.pan + 1.0) * PI * 0.25;
     double gainL = std::cos(panAngle);
     double gainR = std::sin(panAngle);
+    double filterState = 0.0;
+    double filterAlpha = ev.cutoff > 0.0
+        ? std::min(1.0, 1.0 - std::exp(-2.0 * PI * ev.cutoff / sampleRate)) : 1.0;
     for (size_t i = 0; i < nS && startS + i < mixL.size(); ++i) {
         double t = static_cast<double>(i) / sampleRate;
         double env = 1.0;
@@ -202,6 +207,12 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
         }
         if (ev.drumKit == DrumKit::Retro)
             sample = std::round(sample * 7.0) / 7.0;
+        if (ev.drive > 0.0) {
+            double amount = 1.0 + ev.drive * 5.0;
+            sample = std::tanh(sample * amount) / std::tanh(amount);
+        }
+        filterState += filterAlpha * (sample - filterState);
+        sample = filterState;
         double value = sample * env * ev.volume;
         mixL[startS + i] += value * gainL;
         mixR[startS + i] += value * gainR;
@@ -237,10 +248,13 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
         if (voices == 0) continue;
 
         double durSec = ev.durationBeats * (60.0 / cfg.tempo);
+        double filterState = 0.0;
+        double filterAlpha = ev.cutoff > 0.0
+            ? std::min(1.0, 1.0 - std::exp(-2.0 * PI * ev.cutoff / cfg.sampleRate)) : 1.0;
 
         for (size_t i = 0; i < nS && startS + i < totalSamples; ++i) {
             double t = static_cast<double>(i) / cfg.sampleRate;
-            double env = instrumentEnvelope(ev.instrument, t, durSec);
+            double env = instrumentEnvelope(ev, t, durSec);
 
             double sample = 0.0;
             for (size_t v = 0; v < voices; ++v) {
@@ -249,6 +263,12 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
                 double phase = std::fmod(f * t, 1.0);
                 sample += instrumentSample(ev, phase, t, f, cfg.soundMode) * (1.0 / voices);
             }
+            if (ev.drive > 0.0) {
+                double amount = 1.0 + ev.drive * 5.0;
+                sample = std::tanh(sample * amount) / std::tanh(amount);
+            }
+            filterState += filterAlpha * (sample - filterState);
+            sample = filterState;
             double panAngle = (ev.pan + 1.0) * PI * 0.25;
             double value = sample * env * ev.volume;
             mixL[startS + i] += value * std::cos(panAngle);
