@@ -23,12 +23,47 @@ enum class WaveType {
     Noise
 };
 
+enum class InstrumentType {
+    Wave,
+    Piano,
+    ElectricPiano,
+    Organ,
+    MusicBox,
+    Glockenspiel,
+    Strings,
+    Brass,
+    Flute,
+    Guitar,
+    ElectricGuitar,
+    SynthBass
+};
+
 enum class DrumType {
     None,
     Kick,
     Snare,
     Hihat,
-    Tom
+    OpenHihat,
+    TomLow,
+    TomMid,
+    TomHigh,
+    Clap,
+    Rimshot,
+    Crash,
+    Ride,
+    Cowbell,
+    Shaker,
+    Tambourine,
+    Timpani,
+    Impact
+};
+
+enum class DrumKit {
+    Standard,
+    Rock,
+    Electronic,
+    Retro,
+    Orchestral
 };
 
 enum class ExportFormat {
@@ -42,13 +77,17 @@ struct NoteEvent {
     double durationBeats = 0.0;
     double volume = 0.7;
     WaveType wave = WaveType::Square;
+    InstrumentType instrument = InstrumentType::Wave;
     DrumType drum = DrumType::None;
+    DrumKit drumKit = DrumKit::Standard;
 };
 
 struct Config {
     double tempo = 120.0;
     double volume = 0.7;
     WaveType wave = WaveType::Square;
+    InstrumentType instrument = InstrumentType::Wave;
+    DrumKit drumKit = DrumKit::Standard;
     int sampleRate = DEFAULT_SAMPLE_RATE;
     int bits = 16;
     ExportFormat format = ExportFormat::WAV;
@@ -88,6 +127,57 @@ inline std::string waveToString(WaveType w) {
         case WaveType::Noise:    return "noise";
     }
     return "square";
+}
+
+inline InstrumentType parseInstrument(const std::string& s) {
+    std::string name = toLower(s);
+    std::replace(name.begin(), name.end(), '-', '_');
+    if (name == "piano" || name == "acoustic_piano" || name == "grand_piano") return InstrumentType::Piano;
+    if (name == "epiano" || name == "electric_piano" || name == "electricpiano") return InstrumentType::ElectricPiano;
+    if (name == "organ" || name == "church_organ") return InstrumentType::Organ;
+    if (name == "musicbox" || name == "music_box") return InstrumentType::MusicBox;
+    if (name == "glockenspiel" || name == "glock") return InstrumentType::Glockenspiel;
+    if (name == "strings" || name == "string") return InstrumentType::Strings;
+    if (name == "brass" || name == "horn") return InstrumentType::Brass;
+    if (name == "flute") return InstrumentType::Flute;
+    if (name == "guitar" || name == "acoustic_guitar") return InstrumentType::Guitar;
+    if (name == "electric_guitar" || name == "eguitar" || name == "distorted_guitar") return InstrumentType::ElectricGuitar;
+    if (name == "synth_bass" || name == "synthbass" || name == "bass") return InstrumentType::SynthBass;
+    // Wave names remain valid after `instrument` for backwards compatibility.
+    parseWave(name);
+    return InstrumentType::Wave;
+}
+
+inline DrumKit parseDrumKit(const std::string& s) {
+    std::string name = toLower(s);
+    if (name == "standard" || name == "acoustic") return DrumKit::Standard;
+    if (name == "rock") return DrumKit::Rock;
+    if (name == "electronic" || name == "electro") return DrumKit::Electronic;
+    if (name == "retro" || name == "8bit" || name == "chiptune") return DrumKit::Retro;
+    if (name == "orchestral" || name == "orchestra") return DrumKit::Orchestral;
+    throw std::runtime_error("Unknown drum kit: " + s);
+}
+
+inline DrumType parseDrum(const std::string& s) {
+    std::string name = toLower(s);
+    std::replace(name.begin(), name.end(), '-', '_');
+    if (name == "kick" || name == "bassdrum") return DrumType::Kick;
+    if (name == "snare") return DrumType::Snare;
+    if (name == "hihat" || name == "closed_hihat" || name == "hat") return DrumType::Hihat;
+    if (name == "open_hihat" || name == "openhat") return DrumType::OpenHihat;
+    if (name == "tom" || name == "mid_tom" || name == "tom_mid") return DrumType::TomMid;
+    if (name == "low_tom" || name == "tom_low") return DrumType::TomLow;
+    if (name == "high_tom" || name == "tom_high") return DrumType::TomHigh;
+    if (name == "clap") return DrumType::Clap;
+    if (name == "rimshot" || name == "rim") return DrumType::Rimshot;
+    if (name == "crash") return DrumType::Crash;
+    if (name == "ride") return DrumType::Ride;
+    if (name == "cowbell") return DrumType::Cowbell;
+    if (name == "shaker") return DrumType::Shaker;
+    if (name == "tambourine" || name == "tamb") return DrumType::Tambourine;
+    if (name == "timpani") return DrumType::Timpani;
+    if (name == "impact") return DrumType::Impact;
+    throw std::runtime_error("Unknown drum: " + s);
 }
 
 inline double noteToFreq(const std::string& name) {

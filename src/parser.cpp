@@ -12,6 +12,8 @@ void Parser::parse(const std::string& source) {
     double trackTime = 0.0;
     bool inTrack = false;
     WaveType trackWave = WaveType::Square;
+    InstrumentType trackInstrument = InstrumentType::Wave;
+    DrumKit trackDrumKit = DrumKit::Standard;
     double trackVol = 0.7;
     double linearTime = 0.0;
 
@@ -62,17 +64,35 @@ void Parser::parse(const std::string& source) {
                 if (inTrack) trackVol = v / 100.0;
                 else config.volume = v / 100.0;
             }
-            else if (cmd == "wave" || cmd == "instrument") {
+            else if (cmd == "wave") {
                 std::string w;
                 if (!(ls >> w)) throw std::runtime_error("wave requires a type");
                 WaveType ww = parseWave(w);
-                if (inTrack) trackWave = ww;
-                else config.wave = ww;
+                if (inTrack) { trackWave = ww; trackInstrument = InstrumentType::Wave; }
+                else { config.wave = ww; config.instrument = InstrumentType::Wave; }
+            }
+            else if (cmd == "instrument") {
+                std::string name;
+                if (!(ls >> name)) throw std::runtime_error("instrument requires a name");
+                InstrumentType inst = parseInstrument(name);
+                WaveType wave = WaveType::Square;
+                if (inst == InstrumentType::Wave) wave = parseWave(name);
+                if (inTrack) { trackInstrument = inst; if (inst == InstrumentType::Wave) trackWave = wave; }
+                else { config.instrument = inst; if (inst == InstrumentType::Wave) config.wave = wave; }
+            }
+            else if (cmd == "drumkit") {
+                std::string name;
+                if (!(ls >> name)) throw std::runtime_error("drumkit requires a name");
+                DrumKit kit = parseDrumKit(name);
+                if (inTrack) trackDrumKit = kit;
+                else config.drumKit = kit;
             }
             else if (cmd == "track") {
                 inTrack = true;
                 trackTime = 0.0;
                 trackWave = config.wave;
+                trackInstrument = config.instrument;
+                trackDrumKit = config.drumKit;
                 trackVol = config.volume;
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
@@ -88,6 +108,7 @@ void Parser::parse(const std::string& source) {
                 ev.durationBeats = beats;
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
+                ev.instrument = inTrack ? trackInstrument : config.instrument;
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
@@ -119,24 +140,31 @@ void Parser::parse(const std::string& source) {
                 ev.durationBeats = beats;
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
+                ev.instrument = inTrack ? trackInstrument : config.instrument;
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
             }
-            else if (cmd == "kick" || cmd == "snare" || cmd == "hihat" || cmd == "tom") {
+            else if (cmd == "kick" || cmd == "snare" || cmd == "hihat" || cmd == "hat" ||
+                     cmd == "openhat" || cmd == "open_hihat" || cmd == "tom" ||
+                     cmd == "low_tom" || cmd == "high_tom" || cmd == "clap" ||
+                     cmd == "rimshot" || cmd == "rim" || cmd == "crash" || cmd == "ride" ||
+                     cmd == "cowbell" || cmd == "shaker" || cmd == "tambourine" ||
+                     cmd == "timpani" || cmd == "impact" || cmd == "drum") {
+                std::string drumName = cmd;
+                if (cmd == "drum" && !(ls >> drumName))
+                    throw std::runtime_error("usage: drum <name> [beats]");
                 double beats = 0.25;
                 ls >> beats;
-                if (beats <= 0.0) beats = 0.25;
+                if (beats <= 0.0) throw std::runtime_error("drum duration must be > 0");
 
                 NoteEvent ev;
                 ev.durationBeats = beats;
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.startBeat = inTrack ? trackTime : linearTime;
-                if (cmd == "kick")  ev.drum = DrumType::Kick;
-                if (cmd == "snare") ev.drum = DrumType::Snare;
-                if (cmd == "hihat") ev.drum = DrumType::Hihat;
-                if (cmd == "tom")   ev.drum = DrumType::Tom;
+                ev.drum = parseDrum(drumName);
+                ev.drumKit = inTrack ? trackDrumKit : config.drumKit;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
