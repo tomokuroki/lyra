@@ -41,12 +41,13 @@ The synthesizer mixes overlapping events from multiple tracks.
 | `common.hpp`    | Types, note→frequency, string helpers     | New enums, shared utilities          |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
-| `export.*`      | PCM / events → files                      | New formats (FLAC, OGG, …)           |
+| `export.*`      | PCM / events → audio and data files       | New codecs and event formats         |
 | `main.cpp`      | Command-line interface                    | New flags, batch mode, REPL          |
 
 ## Design principles
 
-1. **Zero external dependencies** – only the C++17 standard library.
+1. **Zero-dependency core** – the language and native exporters use only C++17;
+   optional compressed export delegates to FFmpeg.
 2. **Single responsibility** – each translation unit does one job.
 3. **Compatible lowering** – Lyra 2 constructs lower to the stable Lyra 1 event language.
 4. **Absolute-time model** – events carry their own start beat; the mixer stays simple.

@@ -80,7 +80,12 @@ enum class SoundMode {
 
 enum class ExportFormat {
     WAV,
-    MIDI
+    MIDI,
+    AIFF,
+    JSON,
+    FLAC,
+    MP3,
+    OGG
 };
 
 struct NoteEvent {
@@ -141,6 +146,45 @@ inline std::string toLower(std::string s) {
     for (char& c : s)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s;
+}
+
+inline ExportFormat parseExportFormat(const std::string& value) {
+    std::string format = toLower(value);
+    if (format == "wav" || format == "wave") return ExportFormat::WAV;
+    if (format == "midi" || format == "mid") return ExportFormat::MIDI;
+    if (format == "aiff" || format == "aif") return ExportFormat::AIFF;
+    if (format == "json") return ExportFormat::JSON;
+    if (format == "flac") return ExportFormat::FLAC;
+    if (format == "mp3") return ExportFormat::MP3;
+    if (format == "ogg" || format == "vorbis") return ExportFormat::OGG;
+    throw std::runtime_error("Unknown export format: " + value +
+        ". Expected wav, midi, aiff, json, flac, mp3, or ogg");
+}
+
+inline std::string exportFormatToString(ExportFormat format) {
+    switch (format) {
+        case ExportFormat::WAV: return "WAV";
+        case ExportFormat::MIDI: return "MIDI";
+        case ExportFormat::AIFF: return "AIFF";
+        case ExportFormat::JSON: return "JSON";
+        case ExportFormat::FLAC: return "FLAC";
+        case ExportFormat::MP3: return "MP3";
+        case ExportFormat::OGG: return "OGG";
+    }
+    return "WAV";
+}
+
+inline std::string exportFormatExtension(ExportFormat format) {
+    switch (format) {
+        case ExportFormat::WAV: return ".wav";
+        case ExportFormat::MIDI: return ".mid";
+        case ExportFormat::AIFF: return ".aiff";
+        case ExportFormat::JSON: return ".json";
+        case ExportFormat::FLAC: return ".flac";
+        case ExportFormat::MP3: return ".mp3";
+        case ExportFormat::OGG: return ".ogg";
+    }
+    return ".wav";
 }
 
 inline WaveType parseWave(const std::string& s) {

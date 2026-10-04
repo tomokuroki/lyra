@@ -212,7 +212,15 @@ lyra --version
 ```bash
 ./lyra song.lyra                 # → song.wav
 ./lyra -f midi song.lyra         # → song.mid
+./lyra -f aiff song.lyra         # → song.aiff
+./lyra -f json song.lyra         # → song.json (события композиции)
+./lyra -f flac song.lyra         # → song.flac (нужен FFmpeg)
+./lyra -f mp3 song.lyra          # → song.mp3 (нужен FFmpeg)
+./lyra -f ogg song.lyra          # → song.ogg (нужен FFmpeg)
 ```
+
+WAV, MIDI, AIFF и JSON экспортируются самим Lyra. Для сжатых форматов команда
+`ffmpeg` должна быть доступна через системный `PATH`.
 
 ## Обработка ошибок
 

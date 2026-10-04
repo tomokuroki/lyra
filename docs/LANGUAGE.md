@@ -131,8 +131,16 @@ Nested loops are not currently supported.
 ```bash
 ./lyra song.lyra                 # → song.wav
 ./lyra -f midi song.lyra         # → song.mid
+./lyra -f aiff song.lyra         # → song.aiff
+./lyra -f json song.lyra         # → song.json (parsed musical events)
+./lyra -f flac song.lyra         # → song.flac (requires FFmpeg)
+./lyra -f mp3 song.lyra          # → song.mp3 (requires FFmpeg)
+./lyra -f ogg song.lyra          # → song.ogg (requires FFmpeg)
 ./lyra -r 22050 -b 8 song.lyra   # low-fi 8-bit WAV
 ```
+
+WAV, MIDI, AIFF, and JSON are native exporters. Compressed formats use an
+`ffmpeg` executable available in `PATH`.
 
 ## Complete example
 

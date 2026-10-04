@@ -10,6 +10,8 @@ lyra check examples/lyra2/music_theory.lyra
 lyra test examples/lyra3
 lyra check examples/ambient/quiet_orbit.lyra
 lyra check examples/boss/last_bloom_battle.lyra
+lyra -f json examples/hello.lyra hello.json
+lyra -f aiff examples/hello.lyra hello.aiff
 ```
 
 The Lyra 2 showcase covers imports, `let`/`set`/`const`, expressions,

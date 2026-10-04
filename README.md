@@ -9,7 +9,8 @@ with `return`, nested calls, `while`, `break`, `continue`, safer diagnostics,
 and a recursive `lyra test` project runner. See the
 [Russian Lyra 3 guide](docs/LANGUAGE_3_RU.md).
 
-Lyra lets you compose music with a simple text-based syntax and render it to WAV or MIDI.  
+Lyra lets you compose music with a simple text-based syntax and render it to
+WAV, MIDI, AIFF, JSON, FLAC, MP3, or OGG.
 Designed to be easy to read, easy to extend, and easy to contribute to.
 
 ## Lyra 2.1 language front-end
@@ -54,8 +55,9 @@ track drums {
 - Release WAV export: stereo, true 24-bit PCM, 48/96 kHz, safe master peak
 - Track panning, fades, metadata, and streaming/CD/hi-res master presets
 - Loops and chords
-- Export to **WAV** and **MIDI**
-- Zero external dependencies
+- Native export to **WAV**, **MIDI**, **AIFF**, and event **JSON**
+- **FLAC**, **MP3**, and **OGG** export through FFmpeg
+- Zero external dependencies for the language and native exporters
 - Clean modular architecture
 
 ## Quick Start
@@ -73,6 +75,8 @@ mkdir build && cd build && cmake .. && make
 ```bash
 ./lyra examples/hello.lyra
 ./lyra -f midi examples/full_song.lyra
+./lyra -f json examples/full_song.lyra
+./lyra -f flac examples/full_song.lyra
 ./lyra -r 22050 -w square song.lyra out.wav
 ```
 
@@ -92,7 +96,7 @@ lyra/
 │   ├── common.hpp      # Shared types & utilities
 │   ├── parser.hpp/cpp  # Language front-end
 │   ├── synth.hpp/cpp   # Synthesis engine
-│   ├── export.hpp/cpp  # WAV & MIDI back-end
+│   ├── export.hpp/cpp  # Audio, MIDI, and event-data back-end
 │   └── main.cpp        # CLI
 ├── examples/           # Example compositions
 ├── docs/               # Full documentation
