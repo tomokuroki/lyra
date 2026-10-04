@@ -2,7 +2,7 @@ CXX      = g++
 CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Isrc
 TARGET   = lyra
 
-SRCS = src/main.cpp src/parser.cpp src/synth.cpp src/export.cpp
+SRCS = src/main.cpp src/parser.cpp src/synth.cpp src/export.cpp src/frontend.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 all: $(TARGET)

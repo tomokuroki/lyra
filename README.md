@@ -2,8 +2,27 @@
 
 **A minimal, extensible music programming language** written in pure C++17.
 
+## Lyra 3.0
+
+Lyra 3 adds mutable indexed lists, collection operations, scalar functions
+with `return`, nested calls, `while`, `break`, `continue`, safer diagnostics,
+and a recursive `lyra test` project runner. See the
+[Russian Lyra 3 guide](docs/LANGUAGE_3_RU.md).
+
 Lyra lets you compose music with a simple text-based syntax and render it to WAV or MIDI.  
 Designed to be easy to read, easy to extend, and easy to contribute to.
+
+## Lyra 2.1 language front-end
+
+Lyra now supports variables and constants, numeric expressions, parameterized
+patterns and functions, `repeat`, compile-time `if`, transposition, imports,
+music-domain objects, instrument/effect inheritance, and an open standard
+library. Existing Lyra 1 files remain compatible. See the
+[Lyra 2 Russian guide](docs/LANGUAGE_2_RU.md) and
+[complete showcase](examples/lyra2/showcase.lyra).
+
+Version 2.1 adds lists, `for`/`range`, time and key signatures, scale degrees,
+symbolic chords, per-event velocity, configurable envelopes, filtering, and drive.
 
 ```lyra
 tempo 120
@@ -28,6 +47,12 @@ track drums {
 - Procedural instruments: piano, electric piano, organ, music box, strings,
   brass, flute, guitars, synth bass, and more
 - 16 drum sounds and five kits: standard, rock, electronic, retro, orchestral
+- Nine sound modes: 4-bit, 8-bit, 16-bit, 32-bit, 64-bit, tracker/Amiga,
+  FM synthesis, modern chiptune, and clean modern
+- Built-in room reverb and tempo-synced delay
+- Interpreter-style `run`, `check`, and `init` commands
+- Release WAV export: stereo, true 24-bit PCM, 48/96 kHz, safe master peak
+- Track panning, fades, metadata, and streaming/CD/hi-res master presets
 - Loops and chords
 - Export to **WAV** and **MIDI**
 - Zero external dependencies

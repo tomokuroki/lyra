@@ -1,0 +1,48 @@
+tempo 124
+sound fm
+reverb 16
+delay 0.75 14
+volume 62
+
+track metallic_lead {
+  instrument electric_piano
+  loop 4 {
+    note A4 0.5
+    note C5 0.5
+    note E5 1
+    note G5 0.5
+    note E5 0.5
+    note D5 1
+  }
+}
+
+track fm_chords {
+  instrument organ
+  volume 30
+  loop 4 {
+    chord A3 C4 E4 2
+    chord F3 A3 C4 2
+  }
+}
+
+track fm_bass {
+  instrument synth_bass
+  volume 50
+  loop 8 {
+    note A1 0.5
+    note A2 0.5
+    note G2 0.5
+    note E2 0.5
+  }
+}
+
+track machine_drums {
+  drumkit electronic
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    cowbell 0.5
+  }
+}
+

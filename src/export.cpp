@@ -4,18 +4,38 @@
 
 namespace lyra {
 
-void writeWav(const std::string& filename, const std::vector<int16_t>& samples, const Config& cfg) {
+void writeWav(const std::string& filename, const AudioBuffer& audio, const Config& cfg) {
     std::ofstream out(filename, std::ios::binary);
     if (!out) throw std::runtime_error("Cannot create file: " + filename);
 
-    uint32_t dataSize = static_cast<uint32_t>(samples.size() * sizeof(int16_t));
-    uint32_t fileSize = 36 + dataSize;
-    uint16_t channels = 1;
-    uint16_t bits = 16;
+    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24) ? static_cast<uint16_t>(cfg.bits) : 16;
+    uint16_t channels = static_cast<uint16_t>(audio.channels);
+    uint32_t dataSize = static_cast<uint32_t>(audio.samples.size() * (bits / 8));
     uint32_t rate = static_cast<uint32_t>(cfg.sampleRate);
 
+    std::vector<uint8_t> info;
+    if (!cfg.title.empty() || !cfg.artist.empty() || !cfg.album.empty()) {
+        info.insert(info.end(), {'I','N','F','O'});
+        auto appendInfo = [&](const char id[4], const std::string& value) {
+            if (value.empty()) return;
+            info.insert(info.end(), id, id + 4);
+            uint32_t size = static_cast<uint32_t>(value.size() + 1);
+            const uint8_t* sizeBytes = reinterpret_cast<const uint8_t*>(&size);
+            info.insert(info.end(), sizeBytes, sizeBytes + 4);
+            info.insert(info.end(), value.begin(), value.end());
+            info.push_back(0);
+            if (size & 1) info.push_back(0);
+        };
+        appendInfo("INAM", cfg.title);
+        appendInfo("IART", cfg.artist);
+        appendInfo("IPRD", cfg.album);
+    }
+
+    uint32_t riffSize = 4 + (8 + 16) + (8 + dataSize + (dataSize & 1));
+    if (!info.empty()) riffSize += 8 + static_cast<uint32_t>(info.size());
+
     out.write("RIFF", 4);
-    out.write(reinterpret_cast<const char*>(&fileSize), 4);
+    out.write(reinterpret_cast<const char*>(&riffSize), 4);
     out.write("WAVE", 4);
     out.write("fmt ", 4);
     uint32_t fmtSize = 16;
@@ -31,7 +51,37 @@ void writeWav(const std::string& filename, const std::vector<int16_t>& samples, 
     out.write(reinterpret_cast<const char*>(&bits), 2);
     out.write("data", 4);
     out.write(reinterpret_cast<const char*>(&dataSize), 4);
-    out.write(reinterpret_cast<const char*>(samples.data()), dataSize);
+    if (bits == 8) {
+        for (float sample : audio.samples) {
+            double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
+            uint8_t value = static_cast<uint8_t>(std::lround((clamped * 0.5 + 0.5) * 255.0));
+            out.write(reinterpret_cast<const char*>(&value), 1);
+        }
+    } else if (bits == 16) {
+        for (float sample : audio.samples) {
+            double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
+            int16_t value = static_cast<int16_t>(std::lround(clamped * 32767.0));
+            out.write(reinterpret_cast<const char*>(&value), 2);
+        }
+    } else {
+        for (float sample : audio.samples) {
+            double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
+            int32_t value = static_cast<int32_t>(std::lround(clamped * 8388607.0));
+            uint8_t bytes[3] = {
+                static_cast<uint8_t>(value & 0xFF),
+                static_cast<uint8_t>((value >> 8) & 0xFF),
+                static_cast<uint8_t>((value >> 16) & 0xFF)
+            };
+            out.write(reinterpret_cast<const char*>(bytes), 3);
+        }
+    }
+    if (dataSize & 1) out.put(0);
+    if (!info.empty()) {
+        out.write("LIST", 4);
+        uint32_t infoSize = static_cast<uint32_t>(info.size());
+        out.write(reinterpret_cast<const char*>(&infoSize), 4);
+        out.write(reinterpret_cast<const char*>(info.data()), info.size());
+    }
 }
 
 void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
@@ -54,6 +104,27 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
     track.push_back((usPerBeat >> 16) & 0xFF);
     track.push_back((usPerBeat >> 8) & 0xFF);
     track.push_back(usPerBeat & 0xFF);
+
+    // Time-signature and key-signature metadata keep exported MIDI aligned
+    // with the musical source instead of treating every song as C major 4/4.
+    int denominatorPower = 0;
+    for (int value = cfg.timeDenominator; value > 1; value >>= 1) ++denominatorPower;
+    track.insert(track.end(), {0x00, 0xFF, 0x58, 0x04,
+        static_cast<uint8_t>(cfg.timeNumerator), static_cast<uint8_t>(denominatorPower), 24, 8});
+    static const int majorSharps[] = {0,-5,2,-3,4,-1,6,1,-4,3,-2,5};
+    static const int minorSharps[] = {-3,4,-1,6,1,-4,3,-2,5,0,-5,2};
+    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[cfg.keyRoot];
+    track.insert(track.end(), {0x00, 0xFF, 0x59, 0x02,
+        static_cast<uint8_t>(static_cast<int8_t>(sharps)), static_cast<uint8_t>(cfg.keyMinor ? 1 : 0)});
+
+    auto appendMetaText = [&](uint8_t type, const std::string& value) {
+        if (value.empty()) return;
+        track.push_back(0x00); track.push_back(0xFF); track.push_back(type);
+        writeVar(static_cast<uint32_t>(value.size()));
+        track.insert(track.end(), value.begin(), value.end());
+    };
+    appendMetaText(0x03, cfg.title);
+    appendMetaText(0x01, cfg.artist);
 
     struct MidiMessage {
         uint32_t tick;

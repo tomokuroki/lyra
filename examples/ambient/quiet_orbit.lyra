@@ -1,0 +1,142 @@
+# Quiet Orbit — original ambient composition for Lyra
+tempo 72
+sound 64bit
+master streaming
+title "Quiet Orbit"
+artist "Lyra Demo"
+album "Ambient Worlds"
+volume 57
+peak -1.5
+reverb 58
+delay 1.5 14
+fadein 8
+fadeout 16
+
+# Wide, slowly moving harmonic bed — 144 beats.
+track left_pad {
+  instrument strings
+  pan -38
+  volume 27
+  loop 4 {
+    chord D3 A3 D4 F4 4
+    chord Bb2 F3 Bb3 D4 4
+    chord F3 C4 F4 A4 4
+    chord C3 G3 C4 E4 4
+    chord G2 D3 G3 Bb3 4
+    chord D3 A3 D4 F4 4
+    chord Bb2 F3 Bb3 D4 4
+    chord A2 E3 A3 C4 4
+  }
+  chord D3 A3 D4 F4 16
+}
+
+track right_pad {
+  instrument organ
+  pan 38
+  volume 16
+  loop 4 {
+    chord A3 D4 F4 8
+    chord F3 Bb3 D4 8
+    chord C4 F4 A4 8
+    chord E3 A3 C4 8
+  }
+  chord A3 D4 F4 16
+}
+
+# Sparse piano leaves plenty of silence between phrases.
+track distant_piano {
+  instrument piano
+  pan -12
+  volume 35
+  loop 4 {
+    note D5 1
+    note A5 1
+    note F5 2
+    rest 4
+    note D5 1
+    note F5 1
+    note Bb5 2
+    rest 4
+    note C5 1
+    note F5 1
+    note A5 2
+    rest 4
+    note E5 1
+    note D5 1
+    note C5 2
+    rest 4
+  }
+  note D5 4
+  note A4 4
+  note D5 8
+}
+
+# A gentle melody appears only after the atmosphere is established.
+track breath_melody {
+  instrument flute
+  pan 20
+  volume 29
+  rest 32
+  loop 3 {
+    note A4 2
+    note C5 2
+    note D5 4
+    rest 4
+    note F5 2
+    note E5 2
+    note D5 4
+    rest 4
+    note C5 2
+    note A4 2
+    note G4 4
+  }
+  note A4 4
+  note C5 4
+  note D5 8
+}
+
+# Small points of light in the upper register.
+track stars {
+  instrument glockenspiel
+  pan 48
+  volume 15
+  loop 8 {
+    rest 12
+    note A6 1
+    rest 3
+  }
+  rest 4
+  note F6 2
+  rest 2
+  note D6 8
+}
+
+# Very slow foundation; it should be felt more than heard.
+track deep_current {
+  instrument synth_bass
+  pan 0
+  volume 24
+  loop 4 {
+    note D1 8
+    note Bb1 8
+    note F1 8
+    note A1 8
+  }
+  note D1 16
+}
+
+# Minimal organic texture instead of a regular drum beat.
+track air_and_distant_hits {
+  drumkit orchestral
+  pan -5
+  volume 19
+  loop 8 {
+    shaker 2
+    rest 6
+    timpani 2
+    rest 6
+  }
+  rest 4
+  impact 4
+  rest 8
+}

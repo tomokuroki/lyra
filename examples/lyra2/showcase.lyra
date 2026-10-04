@@ -1,0 +1,79 @@
+# Lyra 2 language showcase.
+import "std/all.lyra"
+
+const BPM = 126
+const STEP = 0.5
+let dramatic = 1
+let phrase_repeats = 3
+set phrase_repeats = phrase_repeats + 1
+
+instrument HeroLead extends BrightLead {
+  volume 62
+  pan 14
+}
+
+effect HeroicMaster extends StreamingRelease {
+  reverb 24
+  delay 0.75 10
+}
+
+pattern hero_motif(root, third, fifth, step) {
+  note $root $step
+  note $third $step
+  note $fifth ${step * 2}
+  note $third $step
+  note $root $step
+  rest ${step * 2}
+}
+
+song LyraTwoShowcase {
+  tempo $BPM
+  sound 16bit
+  use effect HeroicMaster
+  title "Lyra 2 Showcase"
+  artist "Lyra Demo"
+
+  if dramatic == 1 {
+    volume 70
+  } else {
+    volume 58
+  }
+
+  track piano uses SoftPiano {
+    repeat $phrase_repeats {
+      play major_arp(C4, E4, G4, $STEP)
+      play major_arp(F4, A4, C5, $STEP)
+    }
+  }
+
+  track lead uses HeroLead {
+    repeat 2 {
+      play hero_motif(C5, E5, G5, $STEP)
+      play hero_motif(F5, A5, C6, $STEP)
+    }
+    transpose 12 {
+      play hero_motif(C5, E5, G5, $STEP)
+      play hero_motif(F5, A5, C6, $STEP)
+    }
+  }
+
+  track bass uses DeepBass {
+    repeat 8 {
+      note C2 1
+      note F2 1
+    }
+  }
+
+  track drums {
+    drumkit rock
+    volume 68
+    repeat 8 {
+      play four_on_floor($STEP)
+    }
+  }
+
+  track ending uses WideStrings {
+    rest 12
+    call final_chord(C4, E4, G4, 4)
+  }
+}

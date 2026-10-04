@@ -1,0 +1,298 @@
+# Ludwig van Beethoven — Ode to Joy (public-domain melody)
+# Full Lyra arrangement: intro, three statements, growing orchestra, finale.
+tempo 116
+sound 64bit
+volume 68
+reverb 31
+delay 1 7
+
+# The famous 64-beat theme, stated three times on piano.
+track main_melody {
+  instrument piano
+  volume 58
+  rest 16
+  loop 3 {
+    # A
+    note E4 1
+    note E4 1
+    note F4 1
+    note G4 1
+    note G4 1
+    note F4 1
+    note E4 1
+    note D4 1
+    note C4 1
+    note C4 1
+    note D4 1
+    note E4 1
+    note E4 1
+    note D4 1
+    note D4 2
+
+    # A variation
+    note E4 1
+    note E4 1
+    note F4 1
+    note G4 1
+    note G4 1
+    note F4 1
+    note E4 1
+    note D4 1
+    note C4 1
+    note C4 1
+    note D4 1
+    note E4 1
+    note D4 1
+    note C4 1
+    note C4 2
+
+    # B
+    note D4 1
+    note D4 1
+    note E4 1
+    note C4 1
+    note D4 1
+    note E4 0.5
+    note F4 0.5
+    note E4 1
+    note C4 1
+    note D4 1
+    note E4 0.5
+    note F4 0.5
+    note E4 1
+    note D4 1
+    note C4 1
+    note D4 1
+    note G3 2
+
+    # A returns
+    note E4 1
+    note E4 1
+    note F4 1
+    note G4 1
+    note G4 1
+    note F4 1
+    note E4 1
+    note D4 1
+    note C4 1
+    note C4 1
+    note D4 1
+    note E4 1
+    note D4 1
+    note C4 1
+    note C4 2
+  }
+  chord C4 E4 G4 8
+}
+
+# The same real melody one octave higher during the final statement.
+track finale_crown {
+  instrument brass
+  volume 33
+  rest 144
+
+  note E5 1
+  note E5 1
+  note F5 1
+  note G5 1
+  note G5 1
+  note F5 1
+  note E5 1
+  note D5 1
+  note C5 1
+  note C5 1
+  note D5 1
+  note E5 1
+  note E5 1
+  note D5 1
+  note D5 2
+
+  note E5 1
+  note E5 1
+  note F5 1
+  note G5 1
+  note G5 1
+  note F5 1
+  note E5 1
+  note D5 1
+  note C5 1
+  note C5 1
+  note D5 1
+  note E5 1
+  note D5 1
+  note C5 1
+  note C5 2
+
+  note D5 1
+  note D5 1
+  note E5 1
+  note C5 1
+  note D5 1
+  note E5 0.5
+  note F5 0.5
+  note E5 1
+  note C5 1
+  note D5 1
+  note E5 0.5
+  note F5 0.5
+  note E5 1
+  note D5 1
+  note C5 1
+  note D5 1
+  note G4 2
+
+  note E5 1
+  note E5 1
+  note F5 1
+  note G5 1
+  note G5 1
+  note F5 1
+  note E5 1
+  note D5 1
+  note C5 1
+  note C5 1
+  note D5 1
+  note E5 1
+  note D5 1
+  note C5 1
+  note C5 2
+  chord C5 E5 G5 8
+}
+
+# Four-bar introduction followed by functional harmony for all three verses.
+track harmony {
+  instrument strings
+  volume 32
+  chord C3 G3 C4 4
+  chord F3 A3 C4 4
+  chord G3 B3 D4 4
+  chord C3 G3 C4 4
+
+  loop 3 {
+    chord C3 E3 G3 4
+    chord G2 D3 G3 4
+    chord C3 E3 G3 4
+    chord G2 D3 G3 4
+
+    chord C3 E3 G3 4
+    chord G2 D3 G3 4
+    chord C3 E3 G3 4
+    chord C3 E3 G3 4
+
+    chord G2 D3 G3 4
+    chord C3 E3 G3 4
+    chord G2 D3 G3 4
+    chord G2 D3 G3 4
+
+    chord C3 E3 G3 4
+    chord G2 D3 G3 4
+    chord C3 E3 G3 4
+    chord C3 E3 G3 4
+  }
+  chord C3 E3 G3 8
+}
+
+track bass {
+  instrument synth_bass
+  volume 38
+  note C2 4
+  note F2 4
+  note G2 4
+  note C2 4
+  loop 3 {
+    note C2 4
+    note G1 4
+    note C2 4
+    note G1 4
+    note C2 4
+    note G1 4
+    note C2 4
+    note C2 4
+    note G1 4
+    note C2 4
+    note G1 4
+    note G1 4
+    note C2 4
+    note G1 4
+    note C2 4
+    note C2 4
+  }
+  note C2 8
+}
+
+# Bells enter for the second statement and make it feel celebratory.
+track bells {
+  instrument glockenspiel
+  volume 21
+  rest 80
+  loop 2 {
+    note C6 2
+    note G5 2
+    note E6 2
+    note G5 2
+    note B5 2
+    note G5 2
+    note D6 2
+    note G5 2
+    note C6 2
+    note G5 2
+    note E6 2
+    note G5 2
+    note B5 2
+    note G5 2
+    note C6 4
+  }
+  loop 4 {
+    note C6 2
+    note E6 2
+    note G6 2
+    note E6 2
+    note D6 2
+    note B5 2
+    note G5 4
+  }
+  chord C6 E6 G6 8
+}
+
+track drums {
+  volume 52
+  rest 16
+
+  # First statement: restrained orchestral pulse.
+  drumkit orchestral
+  loop 16 {
+    timpani 2
+    rest 2
+  }
+
+  # Second statement: steady popular-song groove.
+  drumkit standard
+  loop 16 {
+    kick 1
+    hihat 1
+    snare 1
+    hihat 1
+  }
+
+  # Finale: full rock/orchestral energy.
+  drumkit rock
+  crash 1
+  hihat 1
+  snare 1
+  openhat 1
+  loop 14 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.5
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    openhat 0.5
+  }
+  low_tom 1
+  tom 1
+  high_tom 1
+  impact 1
+  crash 8
+}

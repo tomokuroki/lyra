@@ -1,0 +1,38 @@
+tempo 128
+sound 32bit
+reverb 24
+delay 0.5 10
+volume 66
+
+track piano_hook {
+  instrument electric_piano
+  loop 4 {
+    chord F4 Ab4 C5 1
+    chord Db4 F4 Ab4 1
+    chord Eb4 G4 Bb4 1
+    chord C4 G4 C5 1
+  }
+}
+
+track dance_bass {
+  instrument synth_bass
+  volume 48
+  loop 8 {
+    note F2 0.5
+    note F3 0.5
+    note Eb2 0.5
+    note C3 0.5
+  }
+}
+
+track dance_drums {
+  drumkit electronic
+  volume 72
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    kick 0.5
+    clap 0.5
+  }
+}
+

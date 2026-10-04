@@ -1,0 +1,38 @@
+tempo 112
+sound 4bit
+volume 58
+
+track toy_lead {
+  wave pulse
+  loop 4 {
+    note C5 0.5
+    note E5 0.5
+    note G5 1
+    note E5 0.5
+    note D5 0.5
+    note C5 1
+  }
+}
+
+track toy_bass {
+  wave square
+  volume 35
+  loop 4 {
+    note C3 1
+    note G2 1
+    note F2 1
+    note G2 1
+  }
+}
+
+track clicks {
+  drumkit retro
+  volume 45
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.5
+  }
+}
+

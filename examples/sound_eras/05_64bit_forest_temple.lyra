@@ -1,0 +1,46 @@
+tempo 86
+sound 64bit
+reverb 42
+delay 1.5 12
+volume 58
+
+track flute {
+  instrument flute
+  loop 2 {
+    note A4 1
+    note C5 1
+    note E5 2
+    rest 1
+    note D5 1
+    note C5 2
+  }
+}
+
+track atmosphere {
+  instrument strings
+  volume 28
+  loop 2 {
+    chord A2 E3 A3 4
+    chord F2 C3 F3 4
+  }
+}
+
+track bells {
+  instrument glockenspiel
+  volume 22
+  loop 4 {
+    rest 2
+    note E6 1
+    note C6 1
+  }
+}
+
+track ritual_drum {
+  drumkit orchestral
+  volume 35
+  loop 4 {
+    timpani 2
+    rest 2
+  }
+}
+

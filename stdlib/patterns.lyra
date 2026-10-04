@@ -1,0 +1,36 @@
+# Reusable parameterized patterns from the Lyra 2 standard library.
+
+pattern major_arp(root, third, fifth, step) {
+  note $root $step
+  note $third $step
+  note $fifth $step
+  note $third $step
+}
+
+pattern minor_arp(root, third, fifth, step) {
+  note $root $step
+  note $third $step
+  note $fifth $step
+  note $third $step
+}
+
+pattern four_on_floor(step) {
+  kick $step
+  hihat $step
+  snare $step
+  hihat $step
+}
+
+pattern rock_bar(step) {
+  kick $step
+  hihat ${step / 2}
+  hihat ${step / 2}
+  snare $step
+  kick $step
+  openhat $step
+}
+
+function final_chord(root, third, fifth, beats) {
+  chord $root $third $fifth $beats
+}
+

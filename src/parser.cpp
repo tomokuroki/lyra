@@ -14,6 +14,11 @@ void Parser::parse(const std::string& source) {
     WaveType trackWave = WaveType::Square;
     InstrumentType trackInstrument = InstrumentType::Wave;
     DrumKit trackDrumKit = DrumKit::Standard;
+    double trackPan = 0.0;
+    double trackAttack = -1.0;
+    double trackRelease = -1.0;
+    double trackCutoff = 0.0;
+    double trackDrive = 0.0;
     double trackVol = 0.7;
     double linearTime = 0.0;
 
@@ -29,6 +34,15 @@ void Parser::parse(const std::string& source) {
             loopStack.back().body.push_back(ev);
         else
             events.push_back(ev);
+    };
+
+    auto readText = [](std::istringstream& stream) {
+        std::string value;
+        std::getline(stream, value);
+        value = trim(value);
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+            value = value.substr(1, value.size() - 2);
+        return value;
     };
 
     while (std::getline(iss, line)) {
@@ -58,11 +72,111 @@ void Parser::parse(const std::string& source) {
                 if (!(ls >> t) || t <= 0.0) throw std::runtime_error("tempo must be > 0");
                 config.tempo = t;
             }
+            else if (cmd == "time") {
+                std::string signature;
+                if (!(ls >> signature)) throw std::runtime_error("usage: time <numerator>/<denominator>");
+                size_t slash = signature.find('/');
+                if (slash == std::string::npos) throw std::runtime_error("usage: time <numerator>/<denominator>");
+                int numerator = std::stoi(signature.substr(0, slash));
+                int denominator = std::stoi(signature.substr(slash + 1));
+                if (numerator <= 0 || (denominator != 2 && denominator != 4 && denominator != 8 && denominator != 16))
+                    throw std::runtime_error("unsupported time signature: " + signature);
+                config.timeNumerator = numerator;
+                config.timeDenominator = denominator;
+            }
+            else if (cmd == "key") {
+                std::string root, mode = "major";
+                if (!(ls >> root)) throw std::runtime_error("usage: key <root> [major|minor]");
+                ls >> mode;
+                mode = toLower(mode);
+                if (mode != "major" && mode != "minor") throw std::runtime_error("key mode must be major or minor");
+                config.keyRoot = pitchClass(root);
+                config.keyMinor = mode == "minor";
+            }
+            else if (cmd == "sound" || cmd == "style" || cmd == "quality") {
+                std::string mode;
+                if (!(ls >> mode)) throw std::runtime_error("sound requires a mode name");
+                config.soundMode = parseSoundMode(mode);
+            }
+            else if (cmd == "reverb") {
+                double amount;
+                if (!(ls >> amount) || amount < 0.0 || amount > 100.0)
+                    throw std::runtime_error("reverb must be 0-100");
+                config.reverb = amount / 100.0;
+            }
+            else if (cmd == "delay" || cmd == "echo") {
+                double beats, amount;
+                if (!(ls >> beats >> amount) || beats <= 0.0 || amount < 0.0 || amount > 100.0)
+                    throw std::runtime_error("usage: delay <beats> <0-100>");
+                config.delayBeats = beats;
+                config.delayMix = amount / 100.0;
+            }
+            else if (cmd == "master") {
+                std::string preset;
+                if (!(ls >> preset)) throw std::runtime_error("master requires streaming, cd, or hires");
+                preset = toLower(preset);
+                if (preset == "streaming") {
+                    config.sampleRate = 48000; config.bits = 24; config.channels = 2; config.masterPeakDb = -1.0;
+                } else if (preset == "cd") {
+                    config.sampleRate = 44100; config.bits = 16; config.channels = 2; config.masterPeakDb = -1.0;
+                } else if (preset == "hires" || preset == "hi_res") {
+                    config.sampleRate = 96000; config.bits = 24; config.channels = 2; config.masterPeakDb = -1.0;
+                } else throw std::runtime_error("master requires streaming, cd, or hires");
+            }
+            else if (cmd == "samplerate") {
+                int rate;
+                if (!(ls >> rate) || (rate != 44100 && rate != 48000 && rate != 96000))
+                    throw std::runtime_error("samplerate must be 44100, 48000, or 96000");
+                config.sampleRate = rate;
+            }
+            else if (cmd == "bitdepth") {
+                int bits;
+                if (!(ls >> bits) || (bits != 8 && bits != 16 && bits != 24))
+                    throw std::runtime_error("bitdepth must be 8, 16, or 24");
+                config.bits = bits;
+            }
+            else if (cmd == "channels") {
+                int channels;
+                if (!(ls >> channels) || (channels != 1 && channels != 2))
+                    throw std::runtime_error("channels must be 1 or 2");
+                config.channels = channels;
+            }
+            else if (cmd == "peak") {
+                double peak;
+                if (!(ls >> peak) || peak > 0.0 || peak < -12.0)
+                    throw std::runtime_error("peak must be between -12 and 0 dB");
+                config.masterPeakDb = peak;
+            }
+            else if (cmd == "fadein" || cmd == "fadeout") {
+                double beats;
+                if (!(ls >> beats) || beats < 0.0) throw std::runtime_error(cmd + " must be >= 0 beats");
+                if (cmd == "fadein") config.fadeInBeats = beats;
+                else config.fadeOutBeats = beats;
+            }
+            else if (cmd == "title" || cmd == "artist" || cmd == "album") {
+                std::string value = readText(ls);
+                if (value.empty()) throw std::runtime_error(cmd + " requires text");
+                if (cmd == "title") config.title = value;
+                else if (cmd == "artist") config.artist = value;
+                else config.album = value;
+            }
             else if (cmd == "volume") {
                 double v;
                 if (!(ls >> v) || v < 0.0 || v > 100.0) throw std::runtime_error("volume must be 0-100");
                 if (inTrack) trackVol = v / 100.0;
                 else config.volume = v / 100.0;
+            }
+            else if (cmd == "attack" || cmd == "release" || cmd == "cutoff" || cmd == "drive") {
+                if (!inTrack) throw std::runtime_error(cmd + " can only be used inside a track or instrument object");
+                double value;
+                if (!(ls >> value) || value < 0.0) throw std::runtime_error(cmd + " must be >= 0");
+                if (cmd == "attack") trackAttack = value;
+                else if (cmd == "release") trackRelease = value;
+                else if (cmd == "cutoff") trackCutoff = value;
+                else {
+                    if (value > 100.0) throw std::runtime_error("drive must be 0-100");
+                    trackDrive = value / 100.0;
+                }
             }
             else if (cmd == "wave") {
                 std::string w;
@@ -87,12 +201,24 @@ void Parser::parse(const std::string& source) {
                 if (inTrack) trackDrumKit = kit;
                 else config.drumKit = kit;
             }
+            else if (cmd == "pan") {
+                double pan;
+                if (!(ls >> pan) || pan < -100.0 || pan > 100.0)
+                    throw std::runtime_error("pan must be -100 to 100");
+                if (!inTrack) throw std::runtime_error("pan can only be used inside a track");
+                trackPan = pan / 100.0;
+            }
             else if (cmd == "track") {
                 inTrack = true;
                 trackTime = 0.0;
                 trackWave = config.wave;
                 trackInstrument = config.instrument;
                 trackDrumKit = config.drumKit;
+                trackPan = 0.0;
+                trackAttack = -1.0;
+                trackRelease = -1.0;
+                trackCutoff = 0.0;
+                trackDrive = 0.0;
                 trackVol = config.volume;
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
@@ -109,6 +235,18 @@ void Parser::parse(const std::string& source) {
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
                 ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
+                ev.attack = inTrack ? trackAttack : -1.0;
+                ev.release = inTrack ? trackRelease : -1.0;
+                ev.cutoff = inTrack ? trackCutoff : 0.0;
+                ev.drive = inTrack ? trackDrive : 0.0;
+                std::string option;
+                if (ls >> option) {
+                    double velocity;
+                    if (toLower(option) != "velocity" || !(ls >> velocity) || velocity < 0.0 || velocity > 100.0)
+                        throw std::runtime_error("note option must be: velocity <0-100>");
+                    ev.volume *= velocity / 100.0;
+                }
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
@@ -120,6 +258,33 @@ void Parser::parse(const std::string& source) {
                     throw std::runtime_error("usage: rest <beats>");
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
+            }
+            else if (cmd == "degree") {
+                int degree, octave;
+                double beats;
+                if (!(ls >> degree >> octave >> beats) || degree == 0 || octave < 0 || octave > 8 || beats <= 0.0)
+                    throw std::runtime_error("usage: degree <non-zero degree> <octave> <beats>");
+                static const int majorScale[] = {0,2,4,5,7,9,11};
+                static const int minorScale[] = {0,2,3,5,7,8,10};
+                int zeroBased = degree > 0 ? degree - 1 : degree;
+                int scaleIndex = ((zeroBased % 7) + 7) % 7;
+                int octaveShift = static_cast<int>(std::floor(zeroBased / 7.0));
+                int semitone = (config.keyMinor ? minorScale[scaleIndex] : majorScale[scaleIndex]);
+                int midi = (octave + 1 + octaveShift) * 12 + config.keyRoot + semitone;
+                NoteEvent ev;
+                ev.freqs = {440.0 * std::pow(2.0, (midi - 69) / 12.0)};
+                ev.durationBeats = beats;
+                ev.volume = inTrack ? trackVol : config.volume;
+                ev.wave = inTrack ? trackWave : config.wave;
+                ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
+                ev.attack = inTrack ? trackAttack : -1.0;
+                ev.release = inTrack ? trackRelease : -1.0;
+                ev.cutoff = inTrack ? trackCutoff : 0.0;
+                ev.drive = inTrack ? trackDrive : 0.0;
+                ev.startBeat = inTrack ? trackTime : linearTime;
+                addEvent(ev);
+                if (inTrack) trackTime += beats; else linearTime += beats;
             }
             else if (cmd == "chord") {
                 std::vector<std::string> notes;
@@ -141,10 +306,43 @@ void Parser::parse(const std::string& source) {
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
                 ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
+                ev.attack = inTrack ? trackAttack : -1.0;
+                ev.release = inTrack ? trackRelease : -1.0;
+                ev.cutoff = inTrack ? trackCutoff : 0.0;
+                ev.drive = inTrack ? trackDrive : 0.0;
+                std::string option;
+                if (ls >> option) {
+                    double velocity;
+                    if (toLower(option) != "velocity" || !(ls >> velocity) || velocity < 0.0 || velocity > 100.0)
+                        throw std::runtime_error("chord option must be: velocity <0-100>");
+                    ev.volume *= velocity / 100.0;
+                }
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
+            }
+            else if (cmd == "harmony" || cmd == "chordsym") {
+                std::string symbol;
+                int octave;
+                double beats;
+                if (!(ls >> symbol >> octave >> beats) || octave < 0 || octave > 8 || beats <= 0.0)
+                    throw std::runtime_error("usage: harmony <symbol> <octave> <beats>");
+                NoteEvent ev;
+                ev.freqs = chordSymbolToFreqs(symbol, octave);
+                ev.durationBeats = beats;
+                ev.volume = inTrack ? trackVol : config.volume;
+                ev.wave = inTrack ? trackWave : config.wave;
+                ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
+                ev.attack = inTrack ? trackAttack : -1.0;
+                ev.release = inTrack ? trackRelease : -1.0;
+                ev.cutoff = inTrack ? trackCutoff : 0.0;
+                ev.drive = inTrack ? trackDrive : 0.0;
+                ev.startBeat = inTrack ? trackTime : linearTime;
+                addEvent(ev);
+                if (inTrack) trackTime += beats; else linearTime += beats;
             }
             else if (cmd == "kick" || cmd == "snare" || cmd == "hihat" || cmd == "hat" ||
                      cmd == "openhat" || cmd == "open_hihat" || cmd == "tom" ||
@@ -165,6 +363,18 @@ void Parser::parse(const std::string& source) {
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 ev.drum = parseDrum(drumName);
                 ev.drumKit = inTrack ? trackDrumKit : config.drumKit;
+                ev.pan = inTrack ? trackPan : 0.0;
+                ev.attack = inTrack ? trackAttack : -1.0;
+                ev.release = inTrack ? trackRelease : -1.0;
+                ev.cutoff = inTrack ? trackCutoff : 0.0;
+                ev.drive = inTrack ? trackDrive : 0.0;
+                std::string drumOption;
+                if (ls >> drumOption) {
+                    double velocity;
+                    if (toLower(drumOption) != "velocity" || !(ls >> velocity) || velocity < 0.0 || velocity > 100.0)
+                        throw std::runtime_error("drum option must be: velocity <0-100>");
+                    ev.volume *= velocity / 100.0;
+                }
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;

@@ -6,7 +6,7 @@
 
 namespace lyra {
 
-void writeWav(const std::string& filename, const std::vector<int16_t>& samples, const Config& cfg);
+void writeWav(const std::string& filename, const AudioBuffer& audio, const Config& cfg);
 void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg);
 
 } // namespace lyra

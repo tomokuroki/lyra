@@ -17,6 +17,13 @@ The interpreter turns this description into audio (WAV) or MIDI.
 | `wave <type>` | Default waveform | `wave square` |
 | `instrument <name>` | Select a procedural instrument | `instrument piano` |
 | `drumkit <name>` | Select a drum kit | `drumkit rock` |
+| `sound <mode>` | Select 8bit, 16bit, or modern rendering | `sound 16bit` |
+| `reverb <0-100>` | Add room reflections | `reverb 25` |
+| `delay <beats> <0-100>` | Add tempo-synced echo | `delay 0.75 15` |
+| `master <preset>` | Select streaming, CD, or hi-res master | `master streaming` |
+| `peak <dB>` | Set master peak from -12 to 0 dB | `peak -1` |
+| `fadein`, `fadeout` | Master fades measured in beats | `fadeout 8` |
+| `title`, `artist`, `album` | Embed WAV INFO metadata | `title "My Song"` |
 
 ### Notes and rests
 
@@ -67,6 +74,34 @@ is also accepted. Duration is optional and defaults to `0.25`.
 
 Use `drumkit standard|rock|electronic|retro|orchestral` to change the
 character of the percussion on the current track.
+
+### Sound modes and effects
+
+Available modes are `4bit`, `8bit`, `16bit`, `32bit`, `64bit`, `tracker`,
+`fm`, `chiptune_modern`, and `modern`. They cover toy-like early chips,
+classic console reduction, warm 16-bit chorus, ADPCM-like early sample
+consoles, spacious later-console sound, Amiga modules, phase-modulation
+synthesis, hybrid modern chiptune, and clean full-resolution rendering.
+`reverb` and `delay` add ambience to the master.
+
+### Release-ready WAV
+
+`master streaming` selects stereo 48 kHz/24-bit PCM with a -1 dB peak.
+`master cd` selects stereo 44.1 kHz/16-bit, and `master hires` selects stereo
+96 kHz/24-bit. Override individual values with `samplerate`, `bitdepth`,
+`channels`, and `peak`. Inside a track, `pan -100..100` places its sound in
+the stereo field. Lyra embeds `title`, `artist`, and `album` in a WAV INFO
+chunk; distributor-specific artwork and release identifiers are supplied at upload.
+
+### Interpreter-style commands
+
+```bash
+lyra main.lyra
+lyra run main.lyra song.wav
+lyra check main.lyra
+lyra init main.lyra
+lyra --version
+```
 
 ### Loops
 

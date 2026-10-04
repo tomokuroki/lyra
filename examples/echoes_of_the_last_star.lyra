@@ -1,0 +1,276 @@
+# Echoes of the Last Star
+# Original story-driven retro-RPG theme: quiet memory -> battle -> hopeful finale.
+tempo 136
+sound 16bit
+volume 72
+reverb 28
+delay 0.75 13
+
+# 96 beats. The piano carries the harmony through the whole story.
+track piano {
+  instrument piano
+  volume 55
+
+  # Intro: a small, fragile memory.
+  loop 2 {
+    chord D4 F4 A4 2
+    chord Bb3 D4 F4 2
+    chord F3 A3 C4 2
+    chord C4 E4 G4 2
+  }
+
+  # Main section.
+  loop 4 {
+    note D4 0.5
+    note A4 0.5
+    note F4 0.5
+    note A4 0.5
+    note Bb3 0.5
+    note F4 0.5
+    note D4 0.5
+    note F4 0.5
+    note C4 0.5
+    note G4 0.5
+    note E4 0.5
+    note G4 0.5
+    note A3 0.5
+    note E4 0.5
+    note C#4 0.5
+    note E4 0.5
+  }
+
+  # Bridge: the harmony becomes uncertain.
+  loop 2 {
+    chord G3 Bb3 D4 2
+    chord A3 C4 E4 2
+    chord Bb3 D4 F4 2
+    chord A3 C#4 E4 2
+  }
+
+  # Finale: the opening harmony returns with more weight.
+  loop 4 {
+    chord D4 F4 A4 1
+    chord D4 F4 Bb4 1
+    chord C4 F4 A4 1
+    chord C4 E4 G4 1
+    chord Bb3 D4 F4 1
+    chord C4 E4 G4 1
+    chord A3 C#4 E4 1
+    chord A3 D4 F4 1
+  }
+}
+
+track lead {
+  wave pulse
+  volume 54
+  rest 16
+
+  # The leitmotif. It will return higher in the finale.
+  loop 4 {
+    note D5 0.5
+    note F5 0.5
+    note A5 1
+    note G5 0.5
+    note F5 0.5
+    note E5 1
+    note C5 0.5
+    note E5 0.5
+    note D5 1
+    note A4 1
+    note C#5 1
+  }
+
+  loop 2 {
+    note G5 1
+    note F5 0.5
+    note E5 0.5
+    note D5 1
+    note C#5 1
+    note D5 0.5
+    note F5 0.5
+    note Bb5 1
+    note A5 2
+  }
+
+  loop 4 {
+    note D6 0.5
+    note F6 0.5
+    note A6 1
+    note G6 0.5
+    note F6 0.5
+    note E6 1
+    note C6 0.5
+    note E6 0.5
+    note D6 1
+    note A5 0.5
+    note C#6 0.5
+    note D6 1
+  }
+}
+
+track counter_melody {
+  instrument music_box
+  volume 25
+  rest 48
+  loop 2 {
+    note D6 0.5
+    rest 0.5
+    note A5 0.5
+    rest 0.5
+    note C6 0.5
+    rest 0.5
+    note E6 0.5
+    rest 0.5
+    note F6 1
+    note E6 1
+    note C#6 1
+    note A5 1
+  }
+  loop 4 {
+    note A5 0.5
+    note D6 0.5
+    note F6 1
+    note E6 0.5
+    note C6 0.5
+    note D6 1
+    note F6 0.5
+    note A6 0.5
+    note G6 1
+    note E6 1
+    note D6 1
+  }
+}
+
+track strings {
+  instrument strings
+  volume 31
+  rest 8
+  loop 5 {
+    chord D3 A3 D4 2
+    chord Bb2 F3 Bb3 2
+    chord F3 C4 F4 2
+    chord C3 G3 C4 2
+  }
+  loop 2 {
+    chord G2 D3 G3 2
+    chord A2 E3 A3 2
+    chord Bb2 F3 Bb3 2
+    chord A2 E3 A3 2
+  }
+  loop 4 {
+    chord D3 A3 D4 2
+    chord Bb2 F3 Bb3 2
+    chord C3 G3 C4 2
+    chord A2 E3 A3 2
+  }
+}
+
+track bass {
+  instrument synth_bass
+  volume 43
+  rest 16
+  loop 8 {
+    note D2 1
+    note D3 1
+    note Bb1 1
+    note Bb2 1
+  }
+  loop 4 {
+    note G1 1
+    note G2 1
+    note A1 1
+    note A2 1
+  }
+  loop 8 {
+    note D2 0.5
+    note D3 0.5
+    note A2 0.5
+    note C3 0.5
+    note Bb1 0.5
+    note Bb2 0.5
+    note C2 0.5
+    note C3 0.5
+  }
+}
+
+track drums {
+  drumkit rock
+  volume 66
+  rest 16
+
+  # Battle groove.
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.5
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    openhat 0.5
+  }
+
+  # Half-time bridge.
+  loop 4 {
+    kick 1
+    hihat 0.5
+    hihat 0.5
+    snare 1
+    low_tom 0.5
+    tom 0.5
+  }
+
+  # Dense finale.
+  crash 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  openhat 0.5
+  loop 6 {
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    openhat 0.5
+    kick 0.5
+  }
+  low_tom 0.5
+  tom 0.5
+  high_tom 0.5
+  impact 0.5
+  crash 2
+}
+
+# Quiet epilogue after the battle. The leitmotif survives in a gentler form.
+track outro_piano {
+  instrument piano
+  volume 48
+  rest 96
+  loop 4 {
+    chord D4 F4 A4 2
+    chord Bb3 D4 F4 2
+    chord F3 A3 C4 2
+    chord D4 F4 A4 2
+  }
+}
+
+track outro_memory {
+  instrument music_box
+  volume 27
+  rest 96
+  loop 4 {
+    note D6 1
+    note F6 1
+    note A6 2
+    note G6 1
+    note E6 1
+    note D6 2
+  }
+}

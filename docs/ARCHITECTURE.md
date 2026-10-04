@@ -6,8 +6,13 @@ mature language implementations (parser → intermediate representation → back
 ## Pipeline
 
 ```
-.lyra source text
+.lyra source text + imported modules
         │
+        ▼
+┌───────────────┐
+│ Lyra 2 Frontend│  variables, objects, patterns, expressions, transpose
+└───────────────┘
+        │ expanded command stream
         ▼
 ┌───────────────┐
 │    Parser     │   produces  vector<NoteEvent>
@@ -15,7 +20,7 @@ mature language implementations (parser → intermediate representation → back
         │
         ▼
 ┌───────────────┐
-│    Synth      │   produces  vector<int16_t> (PCM)
+│    Synth      │   produces  floating-point stereo AudioBuffer
 └───────────────┘
         │
         ▼
@@ -32,6 +37,7 @@ The synthesizer mixes overlapping events from multiple tracks.
 
 | File            | Role                                      | Extension point                      |
 |-----------------|-------------------------------------------|--------------------------------------|
+| `frontend.*`    | Lyra 2 objects, imports and expansion     | New high-level language constructs   |
 | `common.hpp`    | Types, note→frequency, string helpers     | New enums, shared utilities          |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
@@ -42,14 +48,15 @@ The synthesizer mixes overlapping events from multiple tracks.
 
 1. **Zero external dependencies** – only the C++17 standard library.
 2. **Single responsibility** – each translation unit does one job.
-3. **Absolute-time model** – events carry their own start beat; the mixer is trivial.
-4. **Fail fast** – errors always include the source line number.
-5. **Easy to build and hack** – `make` or CMake, no complex build system.
+3. **Compatible lowering** – Lyra 2 constructs lower to the stable Lyra 1 event language.
+4. **Absolute-time model** – events carry their own start beat; the mixer stays simple.
+5. **Fail fast** – invalid programs stop before audio export.
+6. **Easy to build and hack** – `make` or CMake, no complex build system.
 
 ## Future directions
 
-- Proper AST instead of immediate event emission
-- Variables, macros, and functions in the language
+- Source locations and a typed AST for richer diagnostics
+- Lexical local scopes and return values for runtime functions
 - Real-time playback
 - Plugin system for custom waveforms / effects
 - Test suite under `tests/`

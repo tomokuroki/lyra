@@ -1,0 +1,41 @@
+tempo 138
+sound tracker
+volume 68
+
+track sample_like_lead {
+  instrument electric_guitar
+  loop 4 {
+    note C5 0.5
+    note Eb5 0.25
+    note G5 0.25
+    note Bb5 0.5
+    note G5 0.5
+    note F5 0.5
+    note Eb5 0.5
+    note C5 1
+  }
+}
+
+track module_bass {
+  instrument synth_bass
+  volume 47
+  loop 8 {
+    note C2 0.5
+    note C3 0.5
+    note Bb1 0.5
+    note G2 0.5
+  }
+}
+
+track breakbeat {
+  drumkit electronic
+  volume 74
+  loop 8 {
+    kick 0.5
+    hihat 0.25
+    snare 0.25
+    kick 0.5
+    snare 0.5
+  }
+}
+
