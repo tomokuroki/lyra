@@ -1,0 +1,23 @@
+# Build
+lyra
+lyra.exe
+*.o
+*.obj
+*.exe
+build/
+cmake-build-*/
+
+# Generated audio
+*.wav
+*.mid
+*.midi
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Misc
+*.log

@@ -1,0 +1,12 @@
+tempo 100
+volume 75
+wave square
+
+note C4 0.5
+note E4 0.5
+note G4 0.5
+note C5 1
+rest 0.25
+note G4 0.5
+note E4 0.5
+note C4 1

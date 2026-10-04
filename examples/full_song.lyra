@@ -1,0 +1,105 @@
+tempo 100
+volume 70
+
+track melody {
+  wave pulse
+  volume 78
+
+  note E4 1
+  note G4 1
+  note A4 1
+  note G4 1
+  note E4 1
+  note D4 1
+  note C4 2
+
+  loop 2 {
+    note C5 1
+    note B4 1
+    note A4 1
+    note G4 1
+    note E4 1
+    note G4 0.5
+    note A4 0.5
+    note C5 2
+  }
+
+  note G4 1
+  note A4 1
+  note B4 1
+  note C5 1
+  note D5 1
+  note C5 0.5
+  note B4 0.5
+  note A4 2
+
+  note E4 1
+  note G4 1
+  note A4 1
+  note G4 1
+  note E4 1
+  note D4 1
+  note C4 2
+}
+
+track bass {
+  wave triangle
+  volume 55
+
+  note C3 2
+  note G2 2
+  note A2 2
+  note F2 2
+
+  loop 2 {
+    note C3 2
+    note G2 2
+    note A2 2
+    note F2 2
+  }
+
+  note G2 2
+  note A2 2
+  note B2 2
+  note C3 2
+
+  note C3 2
+  note G2 2
+  note C3 2
+  note C2 2
+}
+
+track drums {
+  volume 85
+
+  loop 4 {
+    kick 1
+    rest 1
+  }
+
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.5
+  }
+
+  loop 4 {
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    hihat 0.5
+  }
+
+  loop 2 {
+    kick 0.5
+    rest 0.5
+    snare 0.5
+    rest 0.5
+  }
+
+  kick 1
+  snare 1
+  kick 2
+}

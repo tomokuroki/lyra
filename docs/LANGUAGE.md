@@ -1,0 +1,133 @@
+# Lyra Language Reference
+
+## Overview
+
+Lyra is a domain-specific language (DSL) for music composition.  
+A `.lyra` file is a sequence of commands that describe notes, timing, tracks and effects.  
+The interpreter turns this description into audio (WAV) or MIDI.
+
+## Commands
+
+### Global settings
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `tempo <bpm>` | Set tempo in beats per minute | `tempo 120` |
+| `volume <0-100>` | Global or track volume | `volume 80` |
+| `wave <type>` | Default waveform | `wave square` |
+| `instrument <type>` | Alias for `wave` | `instrument pulse` |
+
+### Notes and rests
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `note <pitch> <beats>` | Play a single note | `note C4 0.5` |
+| `rest <beats>` | Silence | `rest 0.25` |
+| `chord <notes...> <beats>` | Play several notes together | `chord C4 E4 G4 1` |
+
+**Pitch format:** `C4`, `C#4`, `Db4`, `F#5`, `Bb3` … (octave 0–8)
+
+**Duration** is expressed in beats. At `tempo 120`:
+- `1.0` = 0.5 seconds
+- `0.5` = 0.25 seconds
+
+### Tracks
+
+```lyra
+track melody {
+  wave pulse
+  volume 80
+  note C4 1
+  note E4 1
+}
+
+track bass {
+  wave triangle
+  note C3 2
+}
+```
+
+Everything inside a `track { ... }` block runs in parallel with other tracks.  
+Tracks are automatically mixed by the synthesis engine.
+
+### Drums
+
+| Command | Description |
+|---------|-------------|
+| `kick <beats>` | Kick drum |
+| `snare <beats>` | Snare drum |
+| `hihat <beats>` | Closed hi-hat |
+| `tom <beats>` | Tom |
+
+Duration is optional (default `0.25`).
+
+### Loops
+
+```lyra
+loop 4 {
+  note C4 0.5
+  note E4 0.5
+}
+```
+
+The body is repeated the given number of times.  
+Nested loops are not currently supported.
+
+## Waveforms
+
+| Name | Character |
+|------|-----------|
+| `sine` | Pure tone |
+| `square` | Classic 8-bit |
+| `triangle` | Soft chiptune |
+| `saw` | Bright / buzzy |
+| `pulse` | 25% duty cycle (very "game-like") |
+| `noise` | White noise |
+
+## Export formats
+
+```bash
+./lyra song.lyra                 # → song.wav
+./lyra -f midi song.lyra         # → song.mid
+./lyra -r 22050 -b 8 song.lyra   # low-fi 8-bit WAV
+```
+
+## Complete example
+
+```lyra
+tempo 110
+volume 75
+
+track melody {
+  wave pulse
+  note C5 0.5
+  note E5 0.5
+  note G5 1
+  rest 0.25
+  note A4 1
+}
+
+track bass {
+  wave triangle
+  volume 50
+  note C3 2
+  note G2 2
+}
+
+track drums {
+  volume 85
+  kick 0.5
+  hihat 0.25
+  hihat 0.25
+  snare 0.5
+  hihat 0.5
+}
+```
+
+## Error handling
+
+The parser reports the line number and a clear message:
+
+```
+Error: Line 12: usage: note <pitch> <beats>
+```

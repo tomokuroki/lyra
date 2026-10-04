@@ -1,0 +1,13 @@
+tempo 120
+volume 80
+
+track drums {
+  loop 4 {
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    hihat 0.25
+    hihat 0.25
+  }
+}
