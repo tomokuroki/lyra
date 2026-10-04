@@ -1,0 +1,48 @@
+# Lyra 2 standard instrument and effect objects.
+
+instrument SoftPiano {
+  instrument piano
+  volume 52
+  pan -8
+}
+
+instrument BrightLead {
+  wave pulse
+  volume 58
+  pan 8
+}
+
+instrument DeepBass {
+  instrument synth_bass
+  volume 43
+  pan 0
+}
+
+instrument AmbientPad {
+  instrument strings
+  volume 27
+  pan -28
+}
+
+instrument WideStrings extends AmbientPad {
+  volume 32
+  pan 28
+}
+
+effect SmallRoom {
+  reverb 18
+  delay 0.5 7
+}
+
+effect DreamSpace extends SmallRoom {
+  reverb 48
+  delay 1.5 13
+}
+
+effect StreamingRelease {
+  master streaming
+  peak -1
+  fadein 1
+  fadeout 8
+}
+

@@ -20,6 +20,10 @@ The interpreter turns this description into audio (WAV) or MIDI.
 | `sound <mode>` | Select 8bit, 16bit, or modern rendering | `sound 16bit` |
 | `reverb <0-100>` | Add room reflections | `reverb 25` |
 | `delay <beats> <0-100>` | Add tempo-synced echo | `delay 0.75 15` |
+| `master <preset>` | Select streaming, CD, or hi-res master | `master streaming` |
+| `peak <dB>` | Set master peak from -12 to 0 dB | `peak -1` |
+| `fadein`, `fadeout` | Master fades measured in beats | `fadeout 8` |
+| `title`, `artist`, `album` | Embed WAV INFO metadata | `title "My Song"` |
 
 ### Notes and rests
 
@@ -79,6 +83,15 @@ classic console reduction, warm 16-bit chorus, ADPCM-like early sample
 consoles, spacious later-console sound, Amiga modules, phase-modulation
 synthesis, hybrid modern chiptune, and clean full-resolution rendering.
 `reverb` and `delay` add ambience to the master.
+
+### Release-ready WAV
+
+`master streaming` selects stereo 48 kHz/24-bit PCM with a -1 dB peak.
+`master cd` selects stereo 44.1 kHz/16-bit, and `master hires` selects stereo
+96 kHz/24-bit. Override individual values with `samplerate`, `bitdepth`,
+`channels`, and `peak`. Inside a track, `pan -100..100` places its sound in
+the stereo field. Lyra embeds `title`, `artist`, and `album` in a WAV INFO
+chunk; distributor-specific artwork and release identifiers are supplied at upload.
 
 ### Interpreter-style commands
 

@@ -100,7 +100,7 @@ static double instrumentEnvelope(InstrumentType instrument, double t, double dur
 }
 
 static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
-                       std::vector<double>& mix, int sampleRate) {
+                       std::vector<double>& mixL, std::vector<double>& mixR, int sampleRate) {
     double pitch = 1.0;
     double decay = 1.0;
     double color = 1.0;
@@ -111,7 +111,10 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
         case DrumKit::Retro:      pitch = 1.35; decay = 1.45; color = 0.70; break;
         case DrumKit::Orchestral: pitch = 0.72; decay = 0.55; color = 1.05; break;
     }
-    for (size_t i = 0; i < nS && startS + i < mix.size(); ++i) {
+    double panAngle = (ev.pan + 1.0) * PI * 0.25;
+    double gainL = std::cos(panAngle);
+    double gainR = std::sin(panAngle);
+    for (size_t i = 0; i < nS && startS + i < mixL.size(); ++i) {
         double t = static_cast<double>(i) / sampleRate;
         double env = 1.0;
         double sample = 0.0;
@@ -199,12 +202,14 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
         }
         if (ev.drumKit == DrumKit::Retro)
             sample = std::round(sample * 7.0) / 7.0;
-        mix[startS + i] += sample * env * ev.volume;
+        double value = sample * env * ev.volume;
+        mixL[startS + i] += value * gainL;
+        mixR[startS + i] += value * gainR;
     }
 }
 
-std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
-    if (events.empty()) return {};
+AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
+    if (events.empty()) return AudioBuffer{{}, cfg.channels};
 
     double maxBeat = 0.0;
     for (const auto& e : events)
@@ -215,7 +220,8 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
                       + (cfg.delayMix > 0.0 ? cfg.delayBeats * beatSec * 2.0 : 0.0);
     double totalSec = maxBeat * beatSec + effectTail;
     size_t totalSamples = static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
-    std::vector<double> mix(totalSamples, 0.0);
+    std::vector<double> mixL(totalSamples, 0.0);
+    std::vector<double> mixR(totalSamples, 0.0);
 
     for (const auto& ev : events) {
         size_t startS = static_cast<size_t>(ev.startBeat * (60.0 / cfg.tempo) * cfg.sampleRate);
@@ -223,7 +229,7 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
         if (nS == 0) continue;
 
         if (ev.drum != DrumType::None) {
-            renderDrum(ev, startS, nS, mix, cfg.sampleRate);
+            renderDrum(ev, startS, nS, mixL, mixR, cfg.sampleRate);
             continue;
         }
 
@@ -243,10 +249,14 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
                 double phase = std::fmod(f * t, 1.0);
                 sample += instrumentSample(ev, phase, t, f, cfg.soundMode) * (1.0 / voices);
             }
-            mix[startS + i] += sample * env * ev.volume;
+            double panAngle = (ev.pan + 1.0) * PI * 0.25;
+            double value = sample * env * ev.volume;
+            mixL[startS + i] += value * std::cos(panAngle);
+            mixR[startS + i] += value * std::sin(panAngle);
         }
     }
 
+    auto processChannel = [&](std::vector<double>& mix) {
     // Musical echo with two decaying repeats.
     if (cfg.delayMix > 0.0 && cfg.delayBeats > 0.0) {
         size_t delay = static_cast<size_t>(cfg.delayBeats * beatSec * cfg.sampleRate);
@@ -341,15 +351,46 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
     // Soft master saturation is friendlier than hard clipping when many tracks meet.
     for (double& sample : mix)
         sample = std::tanh(sample * 1.12) / std::tanh(1.12);
+    };
+
+    processChannel(mixL);
+    processChannel(mixR);
+
+    size_t fadeInSamples = static_cast<size_t>(cfg.fadeInBeats * beatSec * cfg.sampleRate);
+    fadeInSamples = std::min(fadeInSamples, totalSamples);
+    for (size_t i = 0; i < fadeInSamples; ++i) {
+        double gain = static_cast<double>(i) / std::max<size_t>(1, fadeInSamples);
+        mixL[i] *= gain;
+        mixR[i] *= gain;
+    }
+
+    size_t fadeOutSamples = static_cast<size_t>(cfg.fadeOutBeats * beatSec * cfg.sampleRate);
+    fadeOutSamples = std::min(fadeOutSamples, totalSamples);
+    for (size_t i = 0; i < fadeOutSamples; ++i) {
+        double gain = static_cast<double>(fadeOutSamples - i) / std::max<size_t>(1, fadeOutSamples);
+        size_t pos = totalSamples - fadeOutSamples + i;
+        mixL[pos] *= gain;
+        mixR[pos] *= gain;
+    }
 
     double peak = 0.0;
-    for (double s : mix) peak = std::max(peak, std::fabs(s));
-    double norm = (peak > 0.95) ? 0.95 / peak : 1.0;
+    for (double s : mixL) peak = std::max(peak, std::fabs(s));
+    for (double s : mixR) peak = std::max(peak, std::fabs(s));
+    double targetPeak = std::pow(10.0, cfg.masterPeakDb / 20.0);
+    double norm = peak > 1e-12 ? targetPeak / peak : 1.0;
 
-    std::vector<int16_t> out(totalSamples);
+    AudioBuffer out;
+    out.channels = cfg.channels;
+    out.samples.resize(totalSamples * static_cast<size_t>(out.channels));
     for (size_t i = 0; i < totalSamples; ++i) {
-        double s = std::max(-1.0, std::min(1.0, mix[i] * norm));
-        out[i] = static_cast<int16_t>(s * 32767.0);
+        double left = std::max(-1.0, std::min(1.0, mixL[i] * norm));
+        double right = std::max(-1.0, std::min(1.0, mixR[i] * norm));
+        if (out.channels == 1) {
+            out.samples[i] = static_cast<float>((left + right) * 0.5);
+        } else {
+            out.samples[i * 2] = static_cast<float>(left);
+            out.samples[i * 2 + 1] = static_cast<float>(right);
+        }
     }
     return out;
 }

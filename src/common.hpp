@@ -92,6 +92,12 @@ struct NoteEvent {
     InstrumentType instrument = InstrumentType::Wave;
     DrumType drum = DrumType::None;
     DrumKit drumKit = DrumKit::Standard;
+    double pan = 0.0;
+};
+
+struct AudioBuffer {
+    std::vector<float> samples;
+    int channels = 2;
 };
 
 struct Config {
@@ -104,6 +110,13 @@ struct Config {
     double reverb = 0.0;
     double delayBeats = 0.0;
     double delayMix = 0.0;
+    int channels = 2;
+    double masterPeakDb = -1.0;
+    double fadeInBeats = 0.0;
+    double fadeOutBeats = 0.0;
+    std::string title;
+    std::string artist;
+    std::string album;
     int sampleRate = DEFAULT_SAMPLE_RATE;
     int bits = 16;
     ExportFormat format = ExportFormat::WAV;

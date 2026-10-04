@@ -1,0 +1,293 @@
+# Last Bloom — original cinematic boss battle for Lyra
+# Story: beautiful encounter -> desperate fight -> the boss falls -> dark aftermath.
+tempo 132
+sound 64bit
+master streaming
+title "Last Bloom"
+artist "Lyra Demo"
+album "Boss Stories"
+volume 68
+reverb 34
+delay 0.75 9
+peak -1
+fadein 2
+fadeout 8
+
+# The piano tells the complete story and changes from major to minor.
+track story_piano {
+  instrument piano
+  pan -10
+  volume 52
+
+  # PHASE I — pleasant garden theme (64 beats)
+  loop 4 {
+    chord C4 E4 G4 2
+    chord G3 D4 G4 2
+    chord A3 C4 E4 2
+    chord F3 A3 C4 2
+    chord C4 E4 G4 2
+    chord E3 G3 C4 2
+    chord F3 A3 C4 2
+    chord G3 B3 D4 2
+  }
+
+  # PHASE II — the same world turns into a fight (64 beats)
+  loop 4 {
+    note D4 0.5
+    note A4 0.5
+    note F4 0.5
+    note A4 0.5
+    note Bb3 0.5
+    note F4 0.5
+    note D4 0.5
+    note F4 0.5
+    note C4 0.5
+    note G4 0.5
+    note E4 0.5
+    note G4 0.5
+    note A3 0.5
+    note E4 0.5
+    note C#4 0.5
+    note E4 0.5
+    note D4 0.5
+    note A4 0.5
+    note F4 0.5
+    note A4 0.5
+    note G3 0.5
+    note D4 0.5
+    note Bb3 0.5
+    note D4 0.5
+    note A3 0.5
+    note E4 0.5
+    note C#4 0.5
+    note E4 0.5
+    note D4 1
+    chord A3 C#4 E4 1
+  }
+
+  # PHASE III — no victory fanfare, only a dark aftermath (64 beats)
+  loop 2 {
+    chord D3 F3 A3 4
+    chord C#3 E3 A3 4
+    chord C3 Eb3 G3 4
+    chord Bb2 D3 F3 4
+    chord A2 C3 E3 4
+    chord G2 Bb2 D3 4
+    chord F2 A2 C3 4
+    chord A2 C#3 E3 4
+  }
+
+  chord D2 A2 D3 F3 8
+}
+
+# The friendly melody heard before the fight.
+track gentle_theme {
+  instrument flute
+  pan 22
+  volume 39
+  loop 4 {
+    note E5 1
+    note G5 1
+    note C6 2
+    note B5 1
+    note A5 1
+    note G5 2
+    note A5 1
+    note C6 1
+    note E6 2
+    note D6 1
+    note C6 1
+    note G5 2
+  }
+  rest 136
+}
+
+# During battle, the pleasant motif returns in minor and with sharper rhythm.
+track battle_lead {
+  wave pulse
+  pan 10
+  volume 55
+  rest 64
+  loop 4 {
+    note D5 0.5
+    note F5 0.5
+    note A5 1
+    note C6 0.5
+    note Bb5 0.5
+    note A5 1
+    note F5 0.5
+    note G5 0.5
+    note A5 1
+    note E5 0.5
+    note F5 0.5
+    note E5 1
+    note C#5 0.5
+    note E5 0.5
+    note D5 1
+
+    note A5 0.25
+    note G5 0.25
+    note F5 0.5
+    note E5 0.5
+    note D5 0.5
+    note F5 0.25
+    note E5 0.25
+    note D5 0.5
+    note C5 0.5
+    note A4 0.5
+    note C#5 0.5
+    note E5 0.5
+    note A5 1
+  }
+  rest 72
+}
+
+# A sparse descending line remains after the boss is struck down.
+track fallen_melody {
+  instrument music_box
+  pan 18
+  volume 28
+  rest 128
+  loop 2 {
+    note D6 2
+    note C#6 2
+    note C6 2
+    note Bb5 2
+    note A5 4
+    rest 4
+    note F5 2
+    note E5 2
+    note D5 4
+    rest 8
+  }
+  note D5 8
+}
+
+track strings {
+  instrument strings
+  pan -30
+  volume 29
+
+  # Warm sustained harmony.
+  loop 4 {
+    chord C3 G3 C4 4
+    chord G2 D3 G3 4
+    chord A2 E3 A3 4
+    chord F2 C3 F3 4
+  }
+
+  # Battle harmony.
+  loop 4 {
+    chord D3 A3 D4 4
+    chord Bb2 F3 Bb3 4
+    chord C3 G3 C4 4
+    chord A2 E3 A3 4
+  }
+
+  # Chromatic fall after the final blow.
+  loop 2 {
+    chord D2 A2 D3 4
+    chord C#2 A2 C#3 4
+    chord C2 G2 C3 4
+    chord Bb1 F2 Bb2 4
+    chord A1 E2 A2 4
+    chord G1 D2 G2 4
+    chord F1 C2 F2 4
+    chord A1 E2 A2 4
+  }
+  chord D2 A2 D3 8
+}
+
+track bass {
+  instrument synth_bass
+  volume 42
+
+  loop 8 {
+    note C2 2
+    note G1 2
+    note A1 2
+    note F1 2
+  }
+
+  loop 8 {
+    note D2 0.5
+    note D3 0.5
+    note A2 0.5
+    note C3 0.5
+    note Bb1 0.5
+    note Bb2 0.5
+    note A1 0.5
+    note A2 0.5
+    note C2 0.5
+    note C3 0.5
+    note G2 0.5
+    note E2 0.5
+    note A1 0.5
+    note E2 0.5
+    note C#2 0.5
+    note A1 0.5
+  }
+
+  loop 2 {
+    note D1 4
+    note C#1 4
+    note C1 4
+    note Bb1 4
+    note A1 4
+    note G1 4
+    note F1 4
+    note A1 4
+  }
+  note D1 8
+}
+
+track drums {
+  volume 62
+
+  # Pleasant, almost dance-like pulse.
+  drumkit standard
+  loop 16 {
+    kick 1
+    shaker 1
+    rimshot 1
+    tambourine 1
+  }
+
+  # The battle begins.
+  drumkit rock
+  crash 0.5
+  hihat 0.5
+  snare 0.5
+  openhat 0.5
+  loop 15 {
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    openhat 0.5
+    kick 0.5
+  }
+  low_tom 0.5
+  tom 0.5
+  high_tom 0.5
+  impact 0.5
+
+  # Heartbeat-like aftermath, then silence.
+  drumkit orchestral
+  loop 4 {
+    timpani 2
+    rest 6
+  }
+  loop 2 {
+    timpani 1
+    rest 7
+  }
+  impact 4
+  rest 12
+  timpani 4
+  rest 4
+}

@@ -2,6 +2,7 @@
 #include "parser.hpp"
 #include "synth.hpp"
 #include "export.hpp"
+#include "frontend.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -11,18 +12,19 @@ using namespace lyra;
 
 static void printHelp(const char* prog) {
     std::cout <<
-R"(Lyra - A minimal music programming language
+R"(Lyra 2 - A programmable music language
 
 Usage:
   )" << prog << R"( <file.lyra> [output]        Run a song, like: python main.py
   )" << prog << R"( run <file.lyra> [output]    Explicit run command
   )" << prog << R"( check <file.lyra>            Validate without rendering
+  )" << prog << R"( expand <file.lyra>           Show lowered Lyra commands
   )" << prog << R"( init [file.lyra]             Create a starter song
 
 Options:
   -f, --format wav|midi     Output format (default: wav)
-  -r, --rate <Hz>           Sample rate (default: 44100)
-  -b, --bits 16|8           Bit depth for WAV (default: 16)
+  -r, --rate <Hz>           Sample rate: 44100, 48000, or 96000
+  -b, --bits 8|16|24        Bit depth for WAV
   -w, --wave <type>         Default waveform
   -s, --sound <mode>        Sound era/style (see list below)
   -v, --version             Show Lyra version
@@ -39,6 +41,7 @@ Examples:
   )" << prog << R"( main.lyra
   )" << prog << R"( run main.lyra music.wav
   )" << prog << R"( check main.lyra
+  )" << prog << R"( expand main.lyra
   )" << prog << R"( init main.lyra
   )" << prog << R"( -f midi main.lyra
   )" << prog << R"( -r 22050 -w square song.lyra out.wav
@@ -51,7 +54,7 @@ int main(int argc, char* argv[]) {
     Config cfg;
     std::string inputFile;
     std::string outputFile;
-    enum class Command { Run, Check };
+    enum class Command { Run, Check, Expand };
     Command command = Command::Run;
     int firstArg = 1;
 
@@ -61,6 +64,9 @@ int main(int argc, char* argv[]) {
             firstArg = 2;
         } else if (first == "check") {
             command = Command::Check;
+            firstArg = 2;
+        } else if (first == "expand") {
+            command = Command::Expand;
             firstArg = 2;
         } else if (first == "init") {
             std::string filename = argc > 2 ? argv[2] : "main.lyra";
@@ -74,26 +80,32 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: cannot create: " << filename << std::endl;
                 return 1;
             }
-            starter << R"(# My first Lyra song
-tempo 120
-sound 16bit
-reverb 20
+            starter << R"(# My first Lyra 2 song
+import "std/all.lyra"
 
-track piano {
-  instrument piano
-  chord C4 E4 G4 1
-  chord F4 A4 C5 1
-  chord G4 B4 D5 1
-  chord C4 E4 G4 1
-}
+const BPM = 120
+const STEP = 0.5
 
-track drums {
-  drumkit standard
-  loop 2 {
-    kick 0.5
-    hihat 0.5
-    snare 0.5
-    hihat 0.5
+song MyFirstSong {
+  tempo $BPM
+  sound 16bit
+  use effect StreamingRelease
+  title "My Song"
+  artist "My Artist Name"
+
+  track piano uses SoftPiano {
+    repeat 2 {
+      play major_arp(C4, E4, G4, $STEP)
+      play major_arp(F4, A4, C5, $STEP)
+    }
+  }
+
+  track drums {
+    drumkit standard
+    pan 10
+    repeat 2 {
+      play four_on_floor($STEP)
+    }
   }
 }
 )";
@@ -110,7 +122,7 @@ track drums {
             return 0;
         }
         else if (arg == "-v" || arg == "--version") {
-            std::cout << "Lyra 1.1.0" << std::endl;
+            std::cout << "Lyra 2.0.0" << std::endl;
             return 0;
         }
         else if ((arg == "-f" || arg == "--format") && i + 1 < argc) {
@@ -119,11 +131,15 @@ track drums {
         }
         else if ((arg == "-r" || arg == "--rate") && i + 1 < argc) {
             cfg.sampleRate = std::stoi(argv[++i]);
+            if (cfg.sampleRate != 44100 && cfg.sampleRate != 48000 && cfg.sampleRate != 96000) {
+                std::cerr << "Sample rate must be 44100, 48000, or 96000\n";
+                return 1;
+            }
         }
         else if ((arg == "-b" || arg == "--bits") && i + 1 < argc) {
             cfg.bits = std::stoi(argv[++i]);
-            if (cfg.bits != 8 && cfg.bits != 16) {
-                std::cerr << "Bit depth must be 8 or 16\n";
+            if (cfg.bits != 8 && cfg.bits != 16 && cfg.bits != 24) {
+                std::cerr << "Bit depth must be 8, 16, or 24\n";
                 return 1;
             }
         }
@@ -159,19 +175,21 @@ track drums {
     }
 
     try {
-        std::ifstream in(inputFile);
-        if (!in) throw std::runtime_error("Cannot open: " + inputFile);
-
-        std::stringstream buffer;
-        buffer << in.rdbuf();
-
+        Frontend frontend;
         Parser parser;
         parser.config = cfg;
-        parser.parse(buffer.str());
+        std::string expandedSource = frontend.processFile(inputFile);
+        if (command == Command::Expand) {
+            std::cout << expandedSource;
+            return 0;
+        }
+        parser.parse(expandedSource);
 
         std::cout << "Lyra | tempo=" << parser.config.tempo
                   << " | events=" << parser.events.size()
                   << " | sound=" << soundModeToString(parser.config.soundMode)
+                  << " | " << parser.config.sampleRate << "Hz/" << parser.config.bits << "bit/"
+                  << parser.config.channels << "ch"
                   << " | format=" << (cfg.format == ExportFormat::MIDI ? "MIDI" : "WAV")
                   << std::endl;
 
@@ -184,9 +202,10 @@ track drums {
             writeMidi(outputFile, parser.events, parser.config);
             std::cout << "Created: " << outputFile << std::endl;
         } else {
-            auto samples = generateSamples(parser.events, parser.config);
-            writeWav(outputFile, samples, parser.config);
-            double sec = samples.size() / static_cast<double>(parser.config.sampleRate);
+            auto audio = generateSamples(parser.events, parser.config);
+            writeWav(outputFile, audio, parser.config);
+            double sec = audio.samples.size()
+                       / static_cast<double>(parser.config.sampleRate * audio.channels);
             std::cout << "Created: " << outputFile << " (" << sec << "s)" << std::endl;
         }
     } catch (const std::exception& e) {

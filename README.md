@@ -5,6 +5,15 @@
 Lyra lets you compose music with a simple text-based syntax and render it to WAV or MIDI.  
 Designed to be easy to read, easy to extend, and easy to contribute to.
 
+## Lyra 2.0 language front-end
+
+Lyra now supports variables and constants, numeric expressions, parameterized
+patterns and functions, `repeat`, compile-time `if`, transposition, imports,
+music-domain objects, instrument/effect inheritance, and an open standard
+library. Existing Lyra 1 files remain compatible. See the
+[Lyra 2 Russian guide](docs/LANGUAGE_2_RU.md) and
+[complete showcase](examples/lyra2/showcase.lyra).
+
 ```lyra
 tempo 120
 wave square
@@ -32,6 +41,8 @@ track drums {
   FM synthesis, modern chiptune, and clean modern
 - Built-in room reverb and tempo-synced delay
 - Interpreter-style `run`, `check`, and `init` commands
+- Release WAV export: stereo, true 24-bit PCM, 48/96 kHz, safe master peak
+- Track panning, fades, metadata, and streaming/CD/hi-res master presets
 - Loops and chords
 - Export to **WAV** and **MIDI**
 - Zero external dependencies

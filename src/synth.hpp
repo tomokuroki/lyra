@@ -5,6 +5,6 @@
 
 namespace lyra {
 
-std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const Config& cfg);
+AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg);
 
 } // namespace lyra

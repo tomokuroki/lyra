@@ -14,6 +14,7 @@ void Parser::parse(const std::string& source) {
     WaveType trackWave = WaveType::Square;
     InstrumentType trackInstrument = InstrumentType::Wave;
     DrumKit trackDrumKit = DrumKit::Standard;
+    double trackPan = 0.0;
     double trackVol = 0.7;
     double linearTime = 0.0;
 
@@ -29,6 +30,15 @@ void Parser::parse(const std::string& source) {
             loopStack.back().body.push_back(ev);
         else
             events.push_back(ev);
+    };
+
+    auto readText = [](std::istringstream& stream) {
+        std::string value;
+        std::getline(stream, value);
+        value = trim(value);
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+            value = value.substr(1, value.size() - 2);
+        return value;
     };
 
     while (std::getline(iss, line)) {
@@ -76,6 +86,55 @@ void Parser::parse(const std::string& source) {
                 config.delayBeats = beats;
                 config.delayMix = amount / 100.0;
             }
+            else if (cmd == "master") {
+                std::string preset;
+                if (!(ls >> preset)) throw std::runtime_error("master requires streaming, cd, or hires");
+                preset = toLower(preset);
+                if (preset == "streaming") {
+                    config.sampleRate = 48000; config.bits = 24; config.channels = 2; config.masterPeakDb = -1.0;
+                } else if (preset == "cd") {
+                    config.sampleRate = 44100; config.bits = 16; config.channels = 2; config.masterPeakDb = -1.0;
+                } else if (preset == "hires" || preset == "hi_res") {
+                    config.sampleRate = 96000; config.bits = 24; config.channels = 2; config.masterPeakDb = -1.0;
+                } else throw std::runtime_error("master requires streaming, cd, or hires");
+            }
+            else if (cmd == "samplerate") {
+                int rate;
+                if (!(ls >> rate) || (rate != 44100 && rate != 48000 && rate != 96000))
+                    throw std::runtime_error("samplerate must be 44100, 48000, or 96000");
+                config.sampleRate = rate;
+            }
+            else if (cmd == "bitdepth") {
+                int bits;
+                if (!(ls >> bits) || (bits != 8 && bits != 16 && bits != 24))
+                    throw std::runtime_error("bitdepth must be 8, 16, or 24");
+                config.bits = bits;
+            }
+            else if (cmd == "channels") {
+                int channels;
+                if (!(ls >> channels) || (channels != 1 && channels != 2))
+                    throw std::runtime_error("channels must be 1 or 2");
+                config.channels = channels;
+            }
+            else if (cmd == "peak") {
+                double peak;
+                if (!(ls >> peak) || peak > 0.0 || peak < -12.0)
+                    throw std::runtime_error("peak must be between -12 and 0 dB");
+                config.masterPeakDb = peak;
+            }
+            else if (cmd == "fadein" || cmd == "fadeout") {
+                double beats;
+                if (!(ls >> beats) || beats < 0.0) throw std::runtime_error(cmd + " must be >= 0 beats");
+                if (cmd == "fadein") config.fadeInBeats = beats;
+                else config.fadeOutBeats = beats;
+            }
+            else if (cmd == "title" || cmd == "artist" || cmd == "album") {
+                std::string value = readText(ls);
+                if (value.empty()) throw std::runtime_error(cmd + " requires text");
+                if (cmd == "title") config.title = value;
+                else if (cmd == "artist") config.artist = value;
+                else config.album = value;
+            }
             else if (cmd == "volume") {
                 double v;
                 if (!(ls >> v) || v < 0.0 || v > 100.0) throw std::runtime_error("volume must be 0-100");
@@ -105,12 +164,20 @@ void Parser::parse(const std::string& source) {
                 if (inTrack) trackDrumKit = kit;
                 else config.drumKit = kit;
             }
+            else if (cmd == "pan") {
+                double pan;
+                if (!(ls >> pan) || pan < -100.0 || pan > 100.0)
+                    throw std::runtime_error("pan must be -100 to 100");
+                if (!inTrack) throw std::runtime_error("pan can only be used inside a track");
+                trackPan = pan / 100.0;
+            }
             else if (cmd == "track") {
                 inTrack = true;
                 trackTime = 0.0;
                 trackWave = config.wave;
                 trackInstrument = config.instrument;
                 trackDrumKit = config.drumKit;
+                trackPan = 0.0;
                 trackVol = config.volume;
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
@@ -127,6 +194,7 @@ void Parser::parse(const std::string& source) {
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
                 ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
@@ -159,6 +227,7 @@ void Parser::parse(const std::string& source) {
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
                 ev.instrument = inTrack ? trackInstrument : config.instrument;
+                ev.pan = inTrack ? trackPan : 0.0;
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
@@ -183,6 +252,7 @@ void Parser::parse(const std::string& source) {
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 ev.drum = parseDrum(drumName);
                 ev.drumKit = inTrack ? trackDrumKit : config.drumKit;
+                ev.pan = inTrack ? trackPan : 0.0;
                 addEvent(ev);
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
