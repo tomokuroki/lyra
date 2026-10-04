@@ -1,0 +1,79 @@
+# Original retro-RPG boss sketch demonstrating Lyra's new instruments.
+tempo 148
+volume 72
+
+track piano_intro {
+  instrument piano
+  volume 58
+  chord D4 F4 A4 2
+  chord Bb3 D4 F4 2
+  chord C4 E4 G4 2
+  chord A3 C#4 E4 2
+  loop 2 {
+    note D5 0.5
+    note F5 0.5
+    note A5 1
+    note G5 0.5
+    note F5 0.5
+    note E5 1
+  }
+}
+
+track lead {
+  wave square
+  volume 64
+  rest 8
+  loop 2 {
+    note D5 0.25
+    note F5 0.25
+    note A5 0.5
+    note C6 0.5
+    note A5 0.5
+    note G5 0.25
+    note F5 0.25
+    note E5 1
+    note C#5 1
+  }
+}
+
+track strings {
+  instrument strings
+  volume 34
+  loop 2 {
+    chord D3 A3 D4 2
+    chord Bb2 F3 Bb3 2
+    chord C3 G3 C4 2
+    chord A2 E3 A3 2
+  }
+}
+
+track bass {
+  instrument synth_bass
+  volume 48
+  loop 4 {
+    note D2 0.5
+    note D3 0.5
+    note A2 0.5
+    note C3 0.5
+  }
+}
+
+track drums {
+  drumkit rock
+  volume 76
+  crash 0.5
+  hihat 0.5
+  snare 0.5
+  openhat 0.5
+  loop 7 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.25
+    hihat 0.25
+  }
+  low_tom 0.25
+  tom 0.25
+  high_tom 0.25
+  impact 0.25
+}

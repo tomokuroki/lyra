@@ -15,7 +15,8 @@ The interpreter turns this description into audio (WAV) or MIDI.
 | `tempo <bpm>` | Set tempo in beats per minute | `tempo 120` |
 | `volume <0-100>` | Global or track volume | `volume 80` |
 | `wave <type>` | Default waveform | `wave square` |
-| `instrument <type>` | Alias for `wave` | `instrument pulse` |
+| `instrument <name>` | Select a procedural instrument | `instrument piano` |
+| `drumkit <name>` | Select a drum kit | `drumkit rock` |
 
 ### Notes and rests
 
@@ -50,16 +51,22 @@ track bass {
 Everything inside a `track { ... }` block runs in parallel with other tracks.  
 Tracks are automatically mixed by the synthesis engine.
 
+### Instruments
+
+Use `instrument piano`, `electric_piano`, `organ`, `music_box`,
+`glockenspiel`, `strings`, `brass`, `flute`, `guitar`, `electric_guitar`, or
+`synth_bass`. These sounds are synthesized by Lyra without sample libraries.
+Wave names remain accepted by `instrument` for backwards compatibility.
+
 ### Drums
 
-| Command | Description |
-|---------|-------------|
-| `kick <beats>` | Kick drum |
-| `snare <beats>` | Snare drum |
-| `hihat <beats>` | Closed hi-hat |
-| `tom <beats>` | Tom |
+Available commands are `kick`, `snare`, `hihat`, `openhat`, `low_tom`, `tom`,
+`high_tom`, `clap`, `rimshot`, `crash`, `ride`, `cowbell`, `shaker`,
+`tambourine`, `timpani`, and `impact`. The generic form `drum <name> [beats]`
+is also accepted. Duration is optional and defaults to `0.25`.
 
-Duration is optional (default `0.25`).
+Use `drumkit standard|rock|electronic|retro|orchestral` to change the
+character of the percussion on the current track.
 
 ### Loops
 

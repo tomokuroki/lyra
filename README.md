@@ -25,7 +25,9 @@ track drums {
 
 - Multi-track composition (melody, bass, harmony, drums)
 - Waveforms: `sine`, `square`, `triangle`, `saw`, `pulse`, `noise`
-- Drum synthesis: `kick`, `snare`, `hihat`, `tom`
+- Procedural instruments: piano, electric piano, organ, music box, strings,
+  brass, flute, guitars, synth bass, and more
+- 16 drum sounds and five kits: standard, rock, electronic, retro, orchestral
 - Loops and chords
 - Export to **WAV** and **MIDI**
 - Zero external dependencies

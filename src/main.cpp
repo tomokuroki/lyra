@@ -24,6 +24,9 @@ Options:
   -h, --help                Show this help
 
 Waveforms: sine, square, triangle, saw, pulse, noise
+Instruments: piano, electric_piano, organ, music_box, glockenspiel,
+             strings, brass, flute, guitar, electric_guitar, synth_bass
+Drum kits: standard, rock, electronic, retro, orchestral
 
 Examples:
   )" << prog << R"( song.lyra

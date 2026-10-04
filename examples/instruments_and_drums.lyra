@@ -1,0 +1,49 @@
+# Short sound palette: every procedural instrument and every drum voice.
+tempo 120
+volume 62
+
+track instruments {
+  instrument piano
+  chord C4 E4 G4 1
+  instrument electric_piano
+  chord C4 E4 G4 1
+  instrument organ
+  chord C4 F4 A4 1
+  instrument music_box
+  note C6 1
+  instrument glockenspiel
+  note G5 1
+  instrument strings
+  chord C4 E4 G4 1
+  instrument brass
+  chord C4 E4 G4 1
+  instrument flute
+  note C5 1
+  instrument guitar
+  chord C4 E4 G4 1
+  instrument electric_guitar
+  chord C4 G4 C5 1
+  instrument synth_bass
+  note C2 1
+}
+
+track percussion {
+  rest 11
+  drumkit electronic
+  kick 0.5
+  snare 0.5
+  hihat 0.5
+  openhat 0.5
+  low_tom 0.5
+  tom 0.5
+  high_tom 0.5
+  clap 0.5
+  rimshot 0.5
+  crash 0.5
+  ride 0.5
+  cowbell 0.5
+  shaker 0.5
+  tambourine 0.5
+  timpani 0.5
+  drum impact 1
+}
