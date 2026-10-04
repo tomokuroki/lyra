@@ -1,0 +1,48 @@
+tempo 142
+sound 16bit
+reverb 18
+volume 68
+
+track hero {
+  instrument brass
+  volume 48
+  loop 4 {
+    note D5 0.5
+    note F5 0.5
+    note A5 1
+    note C6 0.5
+    note Bb5 0.5
+    note A5 1
+  }
+}
+
+track harmony {
+  instrument strings
+  volume 32
+  loop 4 {
+    chord D3 A3 D4 2
+    chord Bb2 F3 Bb3 2
+  }
+}
+
+track bass {
+  instrument synth_bass
+  volume 46
+  loop 8 {
+    note D2 0.5
+    note D3 0.5
+    note Bb1 0.5
+    note Bb2 0.5
+  }
+}
+
+track drums {
+  drumkit rock
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    openhat 0.5
+  }
+}
+

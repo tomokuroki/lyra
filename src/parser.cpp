@@ -58,6 +58,24 @@ void Parser::parse(const std::string& source) {
                 if (!(ls >> t) || t <= 0.0) throw std::runtime_error("tempo must be > 0");
                 config.tempo = t;
             }
+            else if (cmd == "sound" || cmd == "style" || cmd == "quality") {
+                std::string mode;
+                if (!(ls >> mode)) throw std::runtime_error("sound requires a mode name");
+                config.soundMode = parseSoundMode(mode);
+            }
+            else if (cmd == "reverb") {
+                double amount;
+                if (!(ls >> amount) || amount < 0.0 || amount > 100.0)
+                    throw std::runtime_error("reverb must be 0-100");
+                config.reverb = amount / 100.0;
+            }
+            else if (cmd == "delay" || cmd == "echo") {
+                double beats, amount;
+                if (!(ls >> beats >> amount) || beats <= 0.0 || amount < 0.0 || amount > 100.0)
+                    throw std::runtime_error("usage: delay <beats> <0-100>");
+                config.delayBeats = beats;
+                config.delayMix = amount / 100.0;
+            }
             else if (cmd == "volume") {
                 double v;
                 if (!(ls >> v) || v < 0.0 || v > 100.0) throw std::runtime_error("volume must be 0-100");

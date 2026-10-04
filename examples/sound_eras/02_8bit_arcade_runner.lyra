@@ -1,0 +1,54 @@
+tempo 156
+sound 8bit
+volume 64
+
+track lead {
+  wave square
+  loop 4 {
+    note E5 0.25
+    note G5 0.25
+    note B5 0.5
+    note A5 0.5
+    note G5 0.5
+    note D5 0.25
+    note E5 0.25
+    note G5 0.5
+    note F#5 0.5
+    note D5 0.5
+  }
+}
+
+track arpeggio {
+  wave pulse
+  volume 30
+  loop 8 {
+    note E4 0.25
+    note G4 0.25
+    note B4 0.25
+    note G4 0.25
+    note D4 0.25
+    note F#4 0.25
+    note A4 0.25
+    note F#4 0.25
+  }
+}
+
+track bass {
+  wave triangle
+  volume 44
+  loop 8 {
+    note E2 1
+    note D2 1
+  }
+}
+
+track drums {
+  drumkit retro
+  loop 8 {
+    kick 0.5
+    hihat 0.5
+    snare 0.5
+    hihat 0.5
+  }
+}
+

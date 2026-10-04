@@ -8,10 +8,10 @@ void writeWav(const std::string& filename, const std::vector<int16_t>& samples, 
     std::ofstream out(filename, std::ios::binary);
     if (!out) throw std::runtime_error("Cannot create file: " + filename);
 
-    uint32_t dataSize = static_cast<uint32_t>(samples.size() * sizeof(int16_t));
+    uint16_t bits = cfg.bits == 8 ? 8 : 16;
+    uint32_t dataSize = static_cast<uint32_t>(samples.size() * (bits / 8));
     uint32_t fileSize = 36 + dataSize;
     uint16_t channels = 1;
-    uint16_t bits = 16;
     uint32_t rate = static_cast<uint32_t>(cfg.sampleRate);
 
     out.write("RIFF", 4);
@@ -31,7 +31,14 @@ void writeWav(const std::string& filename, const std::vector<int16_t>& samples, 
     out.write(reinterpret_cast<const char*>(&bits), 2);
     out.write("data", 4);
     out.write(reinterpret_cast<const char*>(&dataSize), 4);
-    out.write(reinterpret_cast<const char*>(samples.data()), dataSize);
+    if (bits == 8) {
+        for (int16_t sample : samples) {
+            uint8_t value = static_cast<uint8_t>((static_cast<int32_t>(sample) + 32768) >> 8);
+            out.write(reinterpret_cast<const char*>(&value), 1);
+        }
+    } else {
+        out.write(reinterpret_cast<const char*>(samples.data()), dataSize);
+    }
 }
 
 void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {

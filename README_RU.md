@@ -13,6 +13,10 @@ Lyra позволяет писать музыку простым текстом 
   колокольчики, струнные, духовые, флейта, гитары и синт-бас
 - 16 ударных: от `kick` и `snare` до `crash`, `ride`, `timpani` и `impact`
 - Наборы ударных: `standard`, `rock`, `electronic`, `retro`, `orchestral`
+- Девять режимов звучания: `4bit`, `8bit`, `16bit`, `32bit`, `64bit`,
+  `tracker`, `fm`, `chiptune_modern` и чистый `modern`
+- Встроенные `reverb` и ритмический `delay`
+- Команды запуска в стиле интерпретатора: `run`, `check`, `init`
 - Циклы и аккорды
 - Экспорт в **WAV** и **MIDI**
 - Без внешних зависимостей
@@ -24,6 +28,17 @@ Lyra позволяет писать музыку простым текстом 
 make
 ./lyra examples/hello.lyra
 ./lyra examples/retro_boss.lyra
+./lyra examples/echoes_of_the_last_star.lyra
+./lyra examples/sound_eras/01_4bit_toy_march.lyra
+```
+
+Как у Python, имя файла можно передать сразу:
+
+```bash
+lyra main.lyra
+lyra run main.lyra
+lyra check main.lyra
+lyra init main.lyra
 ```
 
 ## Документация

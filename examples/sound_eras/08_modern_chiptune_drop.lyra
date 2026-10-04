@@ -1,0 +1,55 @@
+tempo 150
+sound chiptune_modern
+reverb 20
+delay 0.5 12
+volume 66
+
+track chip_hook {
+  wave pulse
+  loop 4 {
+    note G5 0.25
+    note Bb5 0.25
+    note D6 0.5
+    note F6 0.5
+    note D6 0.5
+    note C6 0.25
+    note Bb5 0.25
+    note G5 1
+  }
+}
+
+track modern_chords {
+  instrument electric_piano
+  volume 34
+  loop 4 {
+    chord G3 Bb3 D4 2
+    chord Eb3 G3 Bb3 2
+  }
+}
+
+track sub_bass {
+  instrument synth_bass
+  volume 52
+  loop 8 {
+    note G1 0.5
+    note G2 0.5
+    note F2 0.5
+    note D2 0.5
+  }
+}
+
+track drop_drums {
+  drumkit electronic
+  volume 76
+  crash 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  loop 7 {
+    kick 0.5
+    hihat 0.25
+    hihat 0.25
+    snare 0.5
+    openhat 0.5
+  }
+}

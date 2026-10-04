@@ -28,6 +28,10 @@ track drums {
 - Procedural instruments: piano, electric piano, organ, music box, strings,
   brass, flute, guitars, synth bass, and more
 - 16 drum sounds and five kits: standard, rock, electronic, retro, orchestral
+- Nine sound modes: 4-bit, 8-bit, 16-bit, 32-bit, 64-bit, tracker/Amiga,
+  FM synthesis, modern chiptune, and clean modern
+- Built-in room reverb and tempo-synced delay
+- Interpreter-style `run`, `check`, and `init` commands
 - Loops and chords
 - Export to **WAV** and **MIDI**
 - Zero external dependencies

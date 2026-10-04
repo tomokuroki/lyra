@@ -66,6 +66,18 @@ enum class DrumKit {
     Orchestral
 };
 
+enum class SoundMode {
+    FourBit,
+    EightBit,
+    SixteenBit,
+    ThirtyTwoBit,
+    SixtyFourBit,
+    Tracker,
+    FM,
+    ChiptuneModern,
+    Modern
+};
+
 enum class ExportFormat {
     WAV,
     MIDI
@@ -88,6 +100,10 @@ struct Config {
     WaveType wave = WaveType::Square;
     InstrumentType instrument = InstrumentType::Wave;
     DrumKit drumKit = DrumKit::Standard;
+    SoundMode soundMode = SoundMode::SixteenBit;
+    double reverb = 0.0;
+    double delayBeats = 0.0;
+    double delayMix = 0.0;
     int sampleRate = DEFAULT_SAMPLE_RATE;
     int bits = 16;
     ExportFormat format = ExportFormat::WAV;
@@ -156,6 +172,45 @@ inline DrumKit parseDrumKit(const std::string& s) {
     if (name == "retro" || name == "8bit" || name == "chiptune") return DrumKit::Retro;
     if (name == "orchestral" || name == "orchestra") return DrumKit::Orchestral;
     throw std::runtime_error("Unknown drum kit: " + s);
+}
+
+inline SoundMode parseSoundMode(const std::string& s) {
+    std::string name = toLower(s);
+    std::replace(name.begin(), name.end(), '-', '_');
+    if (name == "4bit" || name == "4_bit" || name == "toy" || name == "primitive")
+        return SoundMode::FourBit;
+    if (name == "8bit" || name == "8_bit" || name == "retro" || name == "chiptune")
+        return SoundMode::EightBit;
+    if (name == "16bit" || name == "16_bit" || name == "snes")
+        return SoundMode::SixteenBit;
+    if (name == "32bit" || name == "32_bit" || name == "ps1" || name == "saturn")
+        return SoundMode::ThirtyTwoBit;
+    if (name == "64bit" || name == "64_bit" || name == "n64")
+        return SoundMode::SixtyFourBit;
+    if (name == "tracker" || name == "amiga" || name == "mod")
+        return SoundMode::Tracker;
+    if (name == "fm" || name == "fm_synthesis" || name == "genesis" || name == "mega_drive")
+        return SoundMode::FM;
+    if (name == "chiptune_modern" || name == "modern_chiptune" || name == "chipmodern")
+        return SoundMode::ChiptuneModern;
+    if (name == "modern" || name == "clean" || name == "hi_fi" || name == "hifi")
+        return SoundMode::Modern;
+    throw std::runtime_error("Unknown sound mode: " + s);
+}
+
+inline std::string soundModeToString(SoundMode mode) {
+    switch (mode) {
+        case SoundMode::FourBit: return "4bit";
+        case SoundMode::EightBit: return "8bit";
+        case SoundMode::SixteenBit: return "16bit";
+        case SoundMode::ThirtyTwoBit: return "32bit";
+        case SoundMode::SixtyFourBit: return "64bit";
+        case SoundMode::Tracker: return "tracker";
+        case SoundMode::FM: return "fm";
+        case SoundMode::ChiptuneModern: return "chiptune_modern";
+        case SoundMode::Modern: return "modern";
+    }
+    return "16bit";
 }
 
 inline DrumType parseDrum(const std::string& s) {

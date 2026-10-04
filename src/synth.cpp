@@ -21,10 +21,23 @@ static double sampleWave(WaveType wave, double phase, double t) {
     return 0.0;
 }
 
-static double instrumentSample(const NoteEvent& ev, double phase, double t, double freq) {
+static double instrumentSample(const NoteEvent& ev, double phase, double t, double freq,
+                               SoundMode soundMode) {
     auto sine = [&](double multiple, double offset = 0.0) {
         return std::sin(2.0 * PI * (phase * multiple + offset));
     };
+
+    if (soundMode == SoundMode::FourBit) {
+        double duty = ev.instrument == InstrumentType::SynthBass ? 0.5 : 0.25;
+        return phase < duty ? 0.82 : -0.82;
+    }
+    if (soundMode == SoundMode::FM) {
+        double ratio = 2.0 + (static_cast<int>(ev.instrument) % 4) * 0.5;
+        double index = ev.instrument == InstrumentType::SynthBass ? 1.2 : 2.8;
+        double modulator = std::sin(2.0 * PI * phase * ratio) * index;
+        return 0.82 * std::sin(2.0 * PI * phase + modulator)
+             + 0.18 * std::sin(2.0 * PI * phase * 2.0);
+    }
 
     switch (ev.instrument) {
         case InstrumentType::Wave:
@@ -197,7 +210,10 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
     for (const auto& e : events)
         maxBeat = std::max(maxBeat, e.startBeat + e.durationBeats);
 
-    double totalSec = maxBeat * (60.0 / cfg.tempo);
+    double beatSec = 60.0 / cfg.tempo;
+    double effectTail = (cfg.reverb > 0.0 ? 1.4 : 0.0)
+                      + (cfg.delayMix > 0.0 ? cfg.delayBeats * beatSec * 2.0 : 0.0);
+    double totalSec = maxBeat * beatSec + effectTail;
     size_t totalSamples = static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
     std::vector<double> mix(totalSamples, 0.0);
 
@@ -225,11 +241,106 @@ std::vector<int16_t> generateSamples(const std::vector<NoteEvent>& events, const
                 double f = ev.freqs[v];
                 if (f <= 0.0) continue;
                 double phase = std::fmod(f * t, 1.0);
-                sample += instrumentSample(ev, phase, t, f) * (1.0 / voices);
+                sample += instrumentSample(ev, phase, t, f, cfg.soundMode) * (1.0 / voices);
             }
             mix[startS + i] += sample * env * ev.volume;
         }
     }
+
+    // Musical echo with two decaying repeats.
+    if (cfg.delayMix > 0.0 && cfg.delayBeats > 0.0) {
+        size_t delay = static_cast<size_t>(cfg.delayBeats * beatSec * cfg.sampleRate);
+        if (delay > 0) {
+            std::vector<double> dry = mix;
+            for (size_t i = delay; i < mix.size(); ++i) {
+                mix[i] += dry[i - delay] * cfg.delayMix;
+                if (i >= delay * 2) mix[i] += dry[i - delay * 2] * cfg.delayMix * 0.38;
+            }
+        }
+    }
+
+    // A small room made from several short reflections. Keeping it simple and
+    // deterministic makes the same .lyra file render identically everywhere.
+    if (cfg.reverb > 0.0) {
+        std::vector<double> dry = mix;
+        const double taps[] = {0.037, 0.061, 0.089, 0.127, 0.181};
+        const double gains[] = {0.34, 0.27, 0.21, 0.16, 0.11};
+        for (size_t tap = 0; tap < 5; ++tap) {
+            size_t offset = static_cast<size_t>(taps[tap] * cfg.sampleRate);
+            for (size_t i = offset; i < mix.size(); ++i)
+                mix[i] += dry[i - offset] * gains[tap] * cfg.reverb;
+        }
+    }
+
+    auto holdAndQuantize = [&](int targetRate, double levels) {
+        size_t hold = std::max<size_t>(1, static_cast<size_t>(cfg.sampleRate / targetRate));
+        for (size_t i = 0; i < mix.size(); i += hold) {
+            double crushed = std::round(mix[i] * levels) / levels;
+            for (size_t j = 0; j < hold && i + j < mix.size(); ++j) mix[i + j] = crushed;
+        }
+    };
+
+    if (cfg.soundMode == SoundMode::FourBit) {
+        // Toy-like early chips: roughly 6 kHz playback and only 15 amplitude values.
+        holdAndQuantize(6000, 7.0);
+    } else if (cfg.soundMode == SoundMode::EightBit) {
+        // Classic console character: lower effective sample rate and coarse amplitude steps.
+        holdAndQuantize(11025, 31.0);
+    } else if (cfg.soundMode == SoundMode::SixteenBit) {
+        // A warm 16-bit-console color: subtle chorus, gentle low-pass, fine quantization.
+        std::vector<double> dry = mix;
+        double filtered = 0.0;
+        for (size_t i = 0; i < mix.size(); ++i) {
+            double time = static_cast<double>(i) / cfg.sampleRate;
+            double delaySec = 0.012 + 0.003 * std::sin(2.0 * PI * 0.7 * time);
+            size_t offset = static_cast<size_t>(delaySec * cfg.sampleRate);
+            double chorus = i >= offset ? dry[i - offset] * 0.11 : 0.0;
+            filtered += 0.62 * ((dry[i] + chorus) - filtered);
+            mix[i] = std::round(filtered * 4095.0) / 4095.0;
+        }
+    } else if (cfg.soundMode == SoundMode::ThirtyTwoBit) {
+        // Early sample-console color: an ADPCM-like predictor and a slightly dark output stage.
+        double predictor = 0.0;
+        double filtered = 0.0;
+        for (double& sample : mix) {
+            double delta = std::max(-0.09, std::min(0.09, sample - predictor));
+            predictor = std::round((predictor + delta) * 2047.0) / 2047.0;
+            filtered += 0.76 * (predictor - filtered);
+            sample = filtered;
+        }
+    } else if (cfg.soundMode == SoundMode::SixtyFourBit) {
+        // Later-console ambience: a clean signal with slow modulation and spacious reflections.
+        std::vector<double> dry = mix;
+        for (size_t i = 0; i < mix.size(); ++i) {
+            double time = static_cast<double>(i) / cfg.sampleRate;
+            size_t modDelay = static_cast<size_t>((0.018 + 0.006 * std::sin(2.0 * PI * 0.23 * time)) * cfg.sampleRate);
+            double wide = i >= modDelay ? dry[i - modDelay] : 0.0;
+            size_t roomDelay = static_cast<size_t>(0.143 * cfg.sampleRate);
+            double room = i >= roomDelay ? dry[i - roomDelay] : 0.0;
+            mix[i] = dry[i] + wide * 0.09 + room * 0.07;
+        }
+    } else if (cfg.soundMode == SoundMode::Tracker) {
+        // Amiga/tracker modules used short, gritty samples with limited playback resolution.
+        holdAndQuantize(22050, 127.0);
+        std::vector<double> dry = mix;
+        size_t slap = static_cast<size_t>(0.006 * cfg.sampleRate);
+        for (size_t i = slap; i < mix.size(); ++i) mix[i] += dry[i - slap] * 0.08;
+    } else if (cfg.soundMode == SoundMode::ChiptuneModern) {
+        // Preserve a polished master while blending in a quiet crushed chip layer.
+        std::vector<double> clean = mix;
+        std::vector<double> chip = mix;
+        size_t hold = std::max<size_t>(1, static_cast<size_t>(cfg.sampleRate / 11025));
+        for (size_t i = 0; i < chip.size(); i += hold) {
+            double crushed = std::round(chip[i] * 31.0) / 31.0;
+            for (size_t j = 0; j < hold && i + j < chip.size(); ++j) chip[i + j] = crushed;
+        }
+        for (size_t i = 0; i < mix.size(); ++i)
+            mix[i] = std::tanh(clean[i] * 1.18) * 0.90 + chip[i] * 0.16;
+    }
+
+    // Soft master saturation is friendlier than hard clipping when many tracks meet.
+    for (double& sample : mix)
+        sample = std::tanh(sample * 1.12) / std::tanh(1.12);
 
     double peak = 0.0;
     for (double s : mix) peak = std::max(peak, std::fabs(s));

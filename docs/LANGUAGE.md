@@ -17,6 +17,9 @@ The interpreter turns this description into audio (WAV) or MIDI.
 | `wave <type>` | Default waveform | `wave square` |
 | `instrument <name>` | Select a procedural instrument | `instrument piano` |
 | `drumkit <name>` | Select a drum kit | `drumkit rock` |
+| `sound <mode>` | Select 8bit, 16bit, or modern rendering | `sound 16bit` |
+| `reverb <0-100>` | Add room reflections | `reverb 25` |
+| `delay <beats> <0-100>` | Add tempo-synced echo | `delay 0.75 15` |
 
 ### Notes and rests
 
@@ -67,6 +70,25 @@ is also accepted. Duration is optional and defaults to `0.25`.
 
 Use `drumkit standard|rock|electronic|retro|orchestral` to change the
 character of the percussion on the current track.
+
+### Sound modes and effects
+
+Available modes are `4bit`, `8bit`, `16bit`, `32bit`, `64bit`, `tracker`,
+`fm`, `chiptune_modern`, and `modern`. They cover toy-like early chips,
+classic console reduction, warm 16-bit chorus, ADPCM-like early sample
+consoles, spacious later-console sound, Amiga modules, phase-modulation
+synthesis, hybrid modern chiptune, and clean full-resolution rendering.
+`reverb` and `delay` add ambience to the master.
+
+### Interpreter-style commands
+
+```bash
+lyra main.lyra
+lyra run main.lyra song.wav
+lyra check main.lyra
+lyra init main.lyra
+lyra --version
+```
 
 ### Loops
 
