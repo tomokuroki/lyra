@@ -1,0 +1,323 @@
+tempo 90
+volume 82
+
+track melody {
+  wave sine
+  volume 88
+  note A3 0.25
+  note B3 0.25
+  note C#4 0.5
+  note B3 0.5
+  note A3 0.5
+  note A3 1
+  note B3 1
+  note D4 0.5
+  note E4 1
+  note D4 0.5
+  note C#4 0.5
+  note B3 0.5
+  note D4 1
+  note G#4 1
+  note F#4 1
+  note E4 0.5
+  note D4 0.5
+  note F#4 1
+  note G#4 0.75
+  note F#4 0.25
+  note E4 0.5
+  note G#4 0.5
+  note D4 1
+  note E4 1
+  note E4 0.5
+  note D4 0.5
+  note F#4 0.5
+  note C#4 0.5
+  note E4 1
+  note F#4 1
+  note B3 1
+  note D4 0.5
+  note A3 0.5
+  note C#4 1
+  note D4 1
+  note B3 0.25
+  note A3 0.25
+  note A3 0.5
+  note B3 0.5
+  note C#4 0.5
+  note B3 1
+  note A3 1
+  note A3 0.5
+  note B3 1
+  note C#4 0.5
+  note D4 0.5
+  note C#4 0.5
+  note E4 1
+  note C#4 1
+  note D4 1
+  note E4 0.5
+  note D4 0.5
+  note C#4 1
+  note F#4 0.75
+  note G#4 0.25
+  note F#4 0.5
+  note E4 0.5
+  note D4 1
+  note F#4 1
+  note B4 0.5
+  note A4 0.5
+  note G#4 0.5
+  note F#4 0.5
+  note A4 1
+  note E4 1
+  note B4 1
+  note A4 0.5
+  note G#4 0.5
+  note B4 1
+  note E4 1
+  note E4 0.25
+  note D4 0.25
+  note F#4 0.5
+  note C#4 0.5
+  note E4 0.5
+  note F#4 1
+  note G#4 1
+  note B3 0.5
+  note D4 1
+  note A3 0.5
+  note C#4 0.5
+  note D4 0.5
+  note E4 1
+  note B3 1
+  note A3 1
+  note A3 0.5
+  note B3 0.5
+  note C#4 1
+  note A3 0.75
+  note B3 0.25
+  note C#4 0.5
+  note D4 0.5
+  note C#4 1
+  note A3 1
+}
+
+track harmony {
+  wave triangle
+  volume 30
+  chord A2 C#3 E3 4
+  chord F#3 A3 C#4 4
+  chord D3 F#3 A3 4
+  chord E3 G#3 B3 4
+  chord A2 C#3 E3 4
+  chord F#3 A3 C#4 4
+  chord D3 F#3 A3 4
+  chord E3 G#3 B3 4
+  chord A2 C#3 E3 4
+  chord F#3 A3 C#4 4
+  chord D3 F#3 A3 4
+  chord E3 G#3 B3 4
+  chord A2 C#3 E3 4
+  chord F#3 A3 C#4 4
+  chord D3 F#3 A3 4
+  chord E3 G#3 B3 4
+}
+
+track bass {
+  wave square
+  volume 44
+  note A1 1
+  note E2 1
+  note A1 1
+  note E2 1
+  note F#2 1
+  note C#3 1
+  note F#2 1
+  note C#3 1
+  note D2 1
+  note A2 1
+  note D2 1
+  note A2 1
+  note E2 1
+  note B2 1
+  note E2 1
+  note B2 1
+  note A1 1
+  note E2 1
+  note A1 1
+  note E2 1
+  note F#2 1
+  note C#3 1
+  note F#2 1
+  note C#3 1
+  note D2 1
+  note A2 1
+  note D2 1
+  note A2 1
+  note E2 1
+  note B2 1
+  note E2 1
+  note B2 1
+  note A1 1
+  note E2 1
+  note A1 1
+  note E2 1
+  note F#2 1
+  note C#3 1
+  note F#2 1
+  note C#3 1
+  note D2 1
+  note A2 1
+  note D2 1
+  note A2 1
+  note E2 1
+  note B2 1
+  note E2 1
+  note B2 1
+  note A1 1
+  note E2 1
+  note A1 1
+  note E2 1
+  note F#2 1
+  note C#3 1
+  note F#2 1
+  note C#3 1
+  note D2 1
+  note A2 1
+  note D2 1
+  note A2 1
+  note E2 1
+  note B2 1
+  note E2 1
+  note B2 1
+}
+
+track drums {
+  volume 58
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+}
