@@ -20,7 +20,21 @@ enum class WaveType {
     Triangle,
     Saw,
     Pulse,
-    Noise
+    Noise,
+    PinkNoise,
+    BrownNoise,
+    BlueNoise
+};
+
+enum class FilterType { LowPass, HighPass, BandPass, Notch };
+enum class LfoWave { Sine, Triangle, Random };
+enum class ModTarget { Pitch, Cutoff, Pan, Amp };
+
+struct LfoRoute {
+    LfoWave wave = LfoWave::Sine;
+    ModTarget target = ModTarget::Pitch;
+    double rateHz = 1.0;
+    double amount = 0.0;
 };
 
 enum class InstrumentType {
@@ -85,7 +99,14 @@ enum class ExportFormat {
     JSON,
     FLAC,
     MP3,
-    OGG
+    OGG,
+    AAC
+};
+
+enum class ScaleType {
+    Major, NaturalMinor, HarmonicMinor, MelodicMinor,
+    Dorian, Phrygian, Lydian, Mixolydian, Locrian,
+    MajorPentatonic, MinorPentatonic, Blues, Chromatic
 };
 
 struct NoteEvent {
@@ -104,9 +125,33 @@ struct NoteEvent {
     DrumKit drumKit = DrumKit::Standard;
     double pan = 0.0;
     double attack = -1.0;
+    double decay = -1.0;
+    double sustain = -1.0;
     double release = -1.0;
     double cutoff = 0.0;
+    FilterType filterType = FilterType::LowPass;
+    double resonance = 0.0;
+    double pitchEnvelopeStart = 0.0;
+    double pitchEnvelopeEnd = 0.0;
+    double filterEnvelopeStart = 0.0;
+    double filterEnvelopeEnd = 0.0;
+    std::vector<LfoRoute> lfoRoutes;
     double drive = 0.0;
+    struct Oscillator {
+        WaveType wave = WaveType::Sine;
+        double level = 1.0;
+        double semitones = 0.0;
+        double detuneCents = 0.0;
+    };
+    std::vector<Oscillator> oscillators;
+    int unisonVoices = 1;
+    double unisonDetuneCents = 0.0;
+    double fmRatio = 0.0;
+    double fmAmount = 0.0;
+    double amRate = 0.0;
+    double amDepth = 0.0;
+    double probability = 1.0;
+    bool triggered = true;
 };
 
 struct AudioBuffer {
@@ -135,6 +180,9 @@ struct Config {
     int timeDenominator = 4;
     int keyRoot = 0;
     bool keyMinor = false;
+    ScaleType scale = ScaleType::Major;
+    bool scaleLock = false;
+    uint32_t randomSeed = 1;
     int sampleRate = DEFAULT_SAMPLE_RATE;
     int bits = 16;
     ExportFormat format = ExportFormat::WAV;
@@ -162,8 +210,9 @@ inline ExportFormat parseExportFormat(const std::string& value) {
     if (format == "flac") return ExportFormat::FLAC;
     if (format == "mp3") return ExportFormat::MP3;
     if (format == "ogg" || format == "vorbis") return ExportFormat::OGG;
+    if (format == "aac" || format == "m4a") return ExportFormat::AAC;
     throw std::runtime_error("Unknown export format: " + value +
-        ". Expected wav, midi, aiff, json, flac, mp3, or ogg");
+        ". Expected wav, midi, aiff, json, flac, mp3, ogg, or aac");
 }
 
 inline std::string exportFormatToString(ExportFormat format) {
@@ -175,6 +224,7 @@ inline std::string exportFormatToString(ExportFormat format) {
         case ExportFormat::FLAC: return "FLAC";
         case ExportFormat::MP3: return "MP3";
         case ExportFormat::OGG: return "OGG";
+        case ExportFormat::AAC: return "AAC";
     }
     return "WAV";
 }
@@ -188,6 +238,7 @@ inline std::string exportFormatExtension(ExportFormat format) {
         case ExportFormat::FLAC: return ".flac";
         case ExportFormat::MP3: return ".mp3";
         case ExportFormat::OGG: return ".ogg";
+        case ExportFormat::AAC: return ".m4a";
     }
     return ".wav";
 }
@@ -200,6 +251,9 @@ inline WaveType parseWave(const std::string& s) {
     if (w == "saw" || w == "sawtooth") return WaveType::Saw;
     if (w == "pulse") return WaveType::Pulse;
     if (w == "noise") return WaveType::Noise;
+    if (w == "pink" || w == "pink_noise") return WaveType::PinkNoise;
+    if (w == "brown" || w == "brown_noise") return WaveType::BrownNoise;
+    if (w == "blue" || w == "blue_noise") return WaveType::BlueNoise;
     throw std::runtime_error("Unknown wave type: " + s);
 }
 
@@ -211,6 +265,9 @@ inline std::string waveToString(WaveType w) {
         case WaveType::Saw:      return "saw";
         case WaveType::Pulse:    return "pulse";
         case WaveType::Noise:    return "noise";
+        case WaveType::PinkNoise:return "pink_noise";
+        case WaveType::BrownNoise:return "brown_noise";
+        case WaveType::BlueNoise:return "blue_noise";
     }
     return "square";
 }
@@ -305,7 +362,77 @@ inline DrumType parseDrum(const std::string& s) {
     throw std::runtime_error("Unknown drum: " + s);
 }
 
-inline double noteToFreq(const std::string& name) {
+inline ScaleType parseScaleType(std::string name) {
+    name = toLower(name);
+    std::replace(name.begin(), name.end(), '-', '_');
+    if (name == "major" || name == "ionian") return ScaleType::Major;
+    if (name == "minor" || name == "natural_minor" || name == "aeolian") return ScaleType::NaturalMinor;
+    if (name == "harmonic_minor") return ScaleType::HarmonicMinor;
+    if (name == "melodic_minor") return ScaleType::MelodicMinor;
+    if (name == "dorian") return ScaleType::Dorian;
+    if (name == "phrygian") return ScaleType::Phrygian;
+    if (name == "lydian") return ScaleType::Lydian;
+    if (name == "mixolydian") return ScaleType::Mixolydian;
+    if (name == "locrian") return ScaleType::Locrian;
+    if (name == "major_pentatonic") return ScaleType::MajorPentatonic;
+    if (name == "minor_pentatonic") return ScaleType::MinorPentatonic;
+    if (name == "blues") return ScaleType::Blues;
+    if (name == "chromatic") return ScaleType::Chromatic;
+    throw std::runtime_error("Unknown scale: " + name);
+}
+
+inline std::string scaleTypeToString(ScaleType scale) {
+    switch (scale) {
+        case ScaleType::Major: return "major";
+        case ScaleType::NaturalMinor: return "minor";
+        case ScaleType::HarmonicMinor: return "harmonic_minor";
+        case ScaleType::MelodicMinor: return "melodic_minor";
+        case ScaleType::Dorian: return "dorian";
+        case ScaleType::Phrygian: return "phrygian";
+        case ScaleType::Lydian: return "lydian";
+        case ScaleType::Mixolydian: return "mixolydian";
+        case ScaleType::Locrian: return "locrian";
+        case ScaleType::MajorPentatonic: return "major_pentatonic";
+        case ScaleType::MinorPentatonic: return "minor_pentatonic";
+        case ScaleType::Blues: return "blues";
+        case ScaleType::Chromatic: return "chromatic";
+    }
+    return "major";
+}
+
+inline const std::vector<int>& scaleIntervals(ScaleType scale) {
+    static const std::vector<int> major{0,2,4,5,7,9,11};
+    static const std::vector<int> naturalMinor{0,2,3,5,7,8,10};
+    static const std::vector<int> harmonicMinor{0,2,3,5,7,8,11};
+    static const std::vector<int> melodicMinor{0,2,3,5,7,9,11};
+    static const std::vector<int> dorian{0,2,3,5,7,9,10};
+    static const std::vector<int> phrygian{0,1,3,5,7,8,10};
+    static const std::vector<int> lydian{0,2,4,6,7,9,11};
+    static const std::vector<int> mixolydian{0,2,4,5,7,9,10};
+    static const std::vector<int> locrian{0,1,3,5,6,8,10};
+    static const std::vector<int> majorPentatonic{0,2,4,7,9};
+    static const std::vector<int> minorPentatonic{0,3,5,7,10};
+    static const std::vector<int> blues{0,3,5,6,7,10};
+    static const std::vector<int> chromatic{0,1,2,3,4,5,6,7,8,9,10,11};
+    switch (scale) {
+        case ScaleType::Major: return major;
+        case ScaleType::NaturalMinor: return naturalMinor;
+        case ScaleType::HarmonicMinor: return harmonicMinor;
+        case ScaleType::MelodicMinor: return melodicMinor;
+        case ScaleType::Dorian: return dorian;
+        case ScaleType::Phrygian: return phrygian;
+        case ScaleType::Lydian: return lydian;
+        case ScaleType::Mixolydian: return mixolydian;
+        case ScaleType::Locrian: return locrian;
+        case ScaleType::MajorPentatonic: return majorPentatonic;
+        case ScaleType::MinorPentatonic: return minorPentatonic;
+        case ScaleType::Blues: return blues;
+        case ScaleType::Chromatic: return chromatic;
+    }
+    return major;
+}
+
+inline int noteToMidi(const std::string& name) {
     static const std::map<std::string, int> noteMap = {
         {"c",0},{"c#",1},{"db",1},{"d",2},{"d#",3},{"eb",3},
         {"e",4},{"f",5},{"f#",6},{"gb",6},{"g",7},{"g#",8},
@@ -339,8 +466,29 @@ inline double noteToFreq(const std::string& name) {
     if (it == noteMap.end())
         throw std::runtime_error("Unknown note name: " + name);
 
-    int midi = (octave + 1) * 12 + it->second;
-    return 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+    return (octave + 1) * 12 + it->second;
+}
+
+inline double midiToFreq(double midi) {
+    return 440.0 * std::pow(2.0, (midi - 69.0) / 12.0);
+}
+
+inline double noteToFreq(const std::string& name) {
+    return midiToFreq(noteToMidi(name));
+}
+
+inline int lockMidiToScale(int midi, int root, ScaleType scale) {
+    const auto& intervals = scaleIntervals(scale);
+    int best = midi;
+    int bestDistance = 13;
+    for (int candidate = midi - 6; candidate <= midi + 6; ++candidate) {
+        const int relative = ((candidate - root) % 12 + 12) % 12;
+        if (std::find(intervals.begin(), intervals.end(), relative) != intervals.end()) {
+            const int distance = std::abs(candidate - midi);
+            if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+        }
+    }
+    return best;
 }
 
 inline int pitchClass(const std::string& name) {
@@ -366,6 +514,14 @@ inline std::vector<double> chordSymbolToFreqs(const std::string& symbol, int oct
     else if (quality == "7") intervals = {0,4,7,10};
     else if (quality == "maj7") intervals = {0,4,7,11};
     else if (quality == "m7" || quality == "min7") intervals = {0,3,7,10};
+    else if (quality == "6" || quality == "maj6") intervals = {0,4,7,9};
+    else if (quality == "m6" || quality == "min6") intervals = {0,3,7,9};
+    else if (quality == "9") intervals = {0,4,7,10,14};
+    else if (quality == "maj9") intervals = {0,4,7,11,14};
+    else if (quality == "m9" || quality == "min9") intervals = {0,3,7,10,14};
+    else if (quality == "add9") intervals = {0,4,7,14};
+    else if (quality == "11") intervals = {0,4,7,10,14,17};
+    else if (quality == "13") intervals = {0,4,7,10,14,17,21};
     else if (quality == "dim") intervals = {0,3,6};
     else if (quality == "dim7") intervals = {0,3,6,9};
     else if (quality == "aug" || quality == "+") intervals = {0,4,8};

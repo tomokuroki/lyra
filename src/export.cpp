@@ -13,7 +13,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
     std::ofstream out(filename, std::ios::binary);
     if (!out) throw std::runtime_error("Cannot create file: " + filename);
 
-    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24) ? static_cast<uint16_t>(cfg.bits) : 16;
+    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24 || cfg.bits == 32) ? static_cast<uint16_t>(cfg.bits) : 16;
     uint16_t channels = static_cast<uint16_t>(audio.channels);
     uint32_t dataSize = static_cast<uint32_t>(audio.samples.size() * (bits / 8));
     uint32_t rate = static_cast<uint32_t>(cfg.sampleRate);
@@ -45,7 +45,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
     out.write("fmt ", 4);
     uint32_t fmtSize = 16;
     out.write(reinterpret_cast<const char*>(&fmtSize), 4);
-    uint16_t audioFormat = 1;
+    uint16_t audioFormat = bits == 32 ? 3 : 1;
     out.write(reinterpret_cast<const char*>(&audioFormat), 2);
     out.write(reinterpret_cast<const char*>(&channels), 2);
     out.write(reinterpret_cast<const char*>(&rate), 4);
@@ -68,7 +68,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
             int16_t value = static_cast<int16_t>(std::lround(clamped * 32767.0));
             out.write(reinterpret_cast<const char*>(&value), 2);
         }
-    } else {
+    } else if (bits == 24) {
         for (float sample : audio.samples) {
             double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
             int32_t value = static_cast<int32_t>(std::lround(clamped * 8388607.0));
@@ -79,6 +79,9 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
             };
             out.write(reinterpret_cast<const char*>(bytes), 3);
         }
+    } else {
+        out.write(reinterpret_cast<const char*>(audio.samples.data()),
+                  static_cast<std::streamsize>(audio.samples.size() * sizeof(float)));
     }
     if (dataSize & 1) out.put(0);
     if (!info.empty()) {
@@ -259,7 +262,8 @@ void writeAiff(const std::string& filename, const AudioBuffer& audio, const Conf
     if (soundChunkSize & 1) out.put(0);
 }
 
-void writeJson(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+static void writeJsonImpl(const std::string& filename, const std::vector<NoteEvent>& events,
+                          const Config& cfg, const Project* project) {
     std::ofstream out(filename);
     if (!out) throw std::runtime_error("Cannot create JSON file: " + filename);
     out << std::setprecision(15);
@@ -268,15 +272,101 @@ void writeJson(const std::string& filename, const std::vector<NoteEvent>& events
         << "  \"tempo\": " << cfg.tempo << ",\n"
         << "  \"time_signature\": [" << cfg.timeNumerator << ", " << cfg.timeDenominator << "],\n"
         << "  \"key\": {\"root\": " << cfg.keyRoot << ", \"mode\": \""
-        << (cfg.keyMinor ? "minor" : "major") << "\"},\n"
+        << (cfg.keyMinor ? "minor" : "major") << "\", \"scale\": \""
+        << scaleTypeToString(cfg.scale) << "\", \"scale_lock\": "
+        << (cfg.scaleLock ? "true" : "false") << "},\n"
+        << "  \"random_seed\": " << cfg.randomSeed << ",\n"
         << "  \"sound\": \"" << soundModeToString(cfg.soundMode) << "\",\n"
         << "  \"sample_rate\": " << cfg.sampleRate << ",\n"
         << "  \"bit_depth\": " << cfg.bits << ",\n"
         << "  \"channels\": " << cfg.channels << ",\n"
         << "  \"metadata\": {\"title\": \"" << jsonEscape(cfg.title)
         << "\", \"artist\": \"" << jsonEscape(cfg.artist)
-        << "\", \"album\": \"" << jsonEscape(cfg.album) << "\"},\n"
-        << "  \"events\": [\n";
+        << "\", \"album\": \"" << jsonEscape(cfg.album) << "\"},\n";
+    if (project) {
+        out << "  \"tempo_map\": [";
+        for (size_t i = 0; i < project->tempoMap.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"beat\": " << project->tempoMap[i].beat
+                << ", \"bpm\": " << project->tempoMap[i].bpm << "}";
+        }
+        out << "],\n  \"sections\": [";
+        for (size_t i = 0; i < project->sections.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"name\": \"" << jsonEscape(project->sections[i].name)
+                << "\", \"start_beat\": " << project->sections[i].startBeat
+                << ", \"length_beats\": " << project->sections[i].lengthBeats << "}";
+        }
+        out << "],\n  \"arrangement\": [";
+        for (size_t i = 0; i < project->arrangement.size(); ++i) {
+            if (i) out << ", ";
+            const auto& placement = project->arrangement[i];
+            out << "{\"pattern\": \"" << jsonEscape(placement.pattern)
+                << "\", \"track\": \"" << jsonEscape(placement.trackId)
+                << "\", \"start_beat\": " << placement.startBeat
+                << ", \"length_beats\": " << placement.lengthBeats << "}";
+        }
+        out << "],\n  \"routing\": {\"buses\": [";
+        for (size_t i = 0; i < project->buses.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"id\": \"" << jsonEscape(project->buses[i].id) << "\", \"inserts\": [";
+            for (size_t fx = 0; fx < project->buses[i].inserts.size(); ++fx) {
+                if (fx) out << ", ";
+                out << "\"" << effectTypeToString(project->buses[i].inserts[fx].type) << "\"";
+            }
+            out << "]}";
+        }
+        out << "], \"master_inserts\": [";
+        for (size_t i = 0; i < project->master.inserts.size(); ++i) {
+            if (i) out << ", ";
+            out << "\"" << effectTypeToString(project->master.inserts[i].type) << "\"";
+        }
+        out << "], \"tracks\": [";
+        for (size_t i = 0; i < project->tracks.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"id\": \"" << jsonEscape(project->tracks[i].id) << "\", \"inserts\": [";
+            for (size_t fx = 0; fx < project->tracks[i].inserts.size(); ++fx) {
+                if (fx) out << ", ";
+                out << "\"" << effectTypeToString(project->tracks[i].inserts[fx].type) << "\"";
+            }
+            out << "], \"sends\": [";
+            for (size_t send = 0; send < project->tracks[i].sends.size(); ++send) {
+                if (send) out << ", ";
+                out << "{\"bus\": \"" << jsonEscape(project->tracks[i].sends[send].busId)
+                    << "\", \"amount\": " << project->tracks[i].sends[send].amount << "}";
+            }
+            out << "], \"sidechains\": [";
+            for (size_t route = 0; route < project->tracks[i].sidechains.size(); ++route) {
+                if (route) out << ", ";
+                const auto& sidechain = project->tracks[i].sidechains[route];
+                out << "{\"source\": \"" << jsonEscape(sidechain.sourceTrackId)
+                    << "\", \"amount\": " << sidechain.amount
+                    << ", \"threshold_db\": " << sidechain.thresholdDb
+                    << ", \"ratio\": " << sidechain.ratio << "}";
+            }
+            out << "], \"clips\": [";
+            for (size_t clipIndex = 0; clipIndex < project->tracks[i].clips.size(); ++clipIndex) {
+                if (clipIndex) out << ", ";
+                const auto& clip = project->tracks[i].clips[clipIndex];
+                out << "{\"path\": \"" << jsonEscape(clip.path)
+                    << "\", \"start_beat\": " << clip.startBeat
+                    << ", \"length_beats\": " << clip.lengthBeats
+                    << ", \"trim_start_seconds\": " << clip.trimStartSeconds
+                    << ", \"trim_end_seconds\": " << clip.trimEndSeconds
+                    << ", \"fade_in_beats\": " << clip.fadeInBeats
+                    << ", \"fade_out_beats\": " << clip.fadeOutBeats
+                    << ", \"gain\": " << clip.gain
+                    << ", \"pitch_semitones\": " << clip.pitchSemitones
+                    << ", \"stretch\": " << clip.stretch
+                    << ", \"reverse\": " << (clip.reverse ? "true" : "false")
+                    << ", \"loop\": " << (clip.loop ? "true" : "false")
+                    << ", \"crossfade_ms\": " << clip.crossfadeMs << "}";
+            }
+            out << "]}";
+        }
+        out << "]},\n";
+    }
+    out << "  \"events\": [\n";
     for (size_t i = 0; i < events.size(); ++i) {
         const auto& event = events[i];
         out << "    {\"track\": \"" << jsonEscape(event.trackId)
@@ -295,18 +385,52 @@ void writeJson(const std::string& filename, const std::vector<NoteEvent>& events
             << "\", \"drum_kit\": \"" << drumKitName(event.drumKit)
             << "\", \"pan\": " << event.pan
             << ", \"attack\": " << event.attack
+            << ", \"decay\": " << event.decay
+            << ", \"sustain\": " << event.sustain
             << ", \"release\": " << event.release
             << ", \"cutoff\": " << event.cutoff
-            << ", \"drive\": " << event.drive << "}";
+            << ", \"filter_type\": " << static_cast<int>(event.filterType)
+            << ", \"resonance\": " << event.resonance
+            << ", \"pitch_envelope\": [" << event.pitchEnvelopeStart << ", " << event.pitchEnvelopeEnd << "]"
+            << ", \"filter_envelope\": [" << event.filterEnvelopeStart << ", " << event.filterEnvelopeEnd << "]"
+            << ", \"lfo_count\": " << event.lfoRoutes.size()
+            << ", \"drive\": " << event.drive
+            << ", \"unison\": " << event.unisonVoices
+            << ", \"unison_detune_cents\": " << event.unisonDetuneCents
+            << ", \"fm_ratio\": " << event.fmRatio
+            << ", \"fm_amount\": " << event.fmAmount
+            << ", \"am_rate\": " << event.amRate
+            << ", \"am_depth\": " << event.amDepth
+            << ", \"probability\": " << event.probability
+            << ", \"triggered\": " << (event.triggered ? "true" : "false")
+            << ", \"oscillators\": [";
+        for (size_t oscillator = 0; oscillator < event.oscillators.size(); ++oscillator) {
+            if (oscillator) out << ", ";
+            const auto& spec = event.oscillators[oscillator];
+            out << "{\"wave\": \"" << waveToString(spec.wave)
+                << "\", \"level\": " << spec.level
+                << ", \"semitones\": " << spec.semitones
+                << ", \"detune_cents\": " << spec.detuneCents << "}";
+        }
+        out << "]}";
         if (i + 1 != events.size()) out << ',';
         out << '\n';
     }
     out << "  ]\n}\n";
 }
 
+void writeJson(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+    writeJsonImpl(filename, events, cfg, nullptr);
+}
+
+void writeJson(const std::string& filename, const Project& project) {
+    writeJsonImpl(filename, project.renderEvents(), project.config, &project);
+}
+
 void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
                           const Config& cfg, ExportFormat format) {
-    if (format != ExportFormat::FLAC && format != ExportFormat::MP3 && format != ExportFormat::OGG)
+    if (format != ExportFormat::FLAC && format != ExportFormat::MP3 &&
+        format != ExportFormat::OGG && format != ExportFormat::AAC)
         throw std::runtime_error("Compressed exporter received a non-compressed format");
 
     auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -319,7 +443,8 @@ void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
     std::string codec;
     if (format == ExportFormat::FLAC) codec = "-c:a flac";
     else if (format == ExportFormat::MP3) codec = "-c:a libmp3lame -q:a 2";
-    else codec = "-c:a libvorbis -q:a 6";
+    else if (format == ExportFormat::OGG) codec = "-c:a libvorbis -q:a 6";
+    else codec = "-c:a aac -b:a 256k";
 
     std::string command = "ffmpeg -nostdin -hide_banner -loglevel error -y -i "
         + temporaryArgument + " " + codec + " " + outputArgument;
@@ -330,7 +455,8 @@ void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
         throw std::runtime_error("FFmpeg export failed. Install FFmpeg and ensure `ffmpeg` is available in PATH");
 }
 
-void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+static void writeMidiImpl(const std::string& filename, const std::vector<NoteEvent>& events,
+                          const Config& cfg, const Project* project) {
     const int TPQ = 480;
     std::vector<uint8_t> track;
 
@@ -359,7 +485,22 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
         static_cast<uint8_t>(cfg.timeNumerator), static_cast<uint8_t>(denominatorPower), 24, 8});
     static const int majorSharps[] = {0,-5,2,-3,4,-1,6,1,-4,3,-2,5};
     static const int minorSharps[] = {-3,4,-1,6,1,-4,3,-2,5,0,-5,2};
-    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[cfg.keyRoot];
+    int relativeMajorOffset = 0;
+    switch (cfg.scale) {
+        case ScaleType::NaturalMinor:
+        case ScaleType::HarmonicMinor:
+        case ScaleType::MelodicMinor:
+        case ScaleType::MinorPentatonic:
+        case ScaleType::Blues: relativeMajorOffset = 3; break;
+        case ScaleType::Dorian: relativeMajorOffset = 10; break;
+        case ScaleType::Phrygian: relativeMajorOffset = 8; break;
+        case ScaleType::Lydian: relativeMajorOffset = 7; break;
+        case ScaleType::Mixolydian: relativeMajorOffset = 5; break;
+        case ScaleType::Locrian: relativeMajorOffset = 1; break;
+        default: break;
+    }
+    const int signatureRoot = (cfg.keyRoot + relativeMajorOffset) % 12;
+    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[signatureRoot];
     track.insert(track.end(), {0x00, 0xFF, 0x59, 0x02,
         static_cast<uint8_t>(static_cast<int8_t>(sharps)), static_cast<uint8_t>(cfg.keyMinor ? 1 : 0)});
 
@@ -378,6 +519,17 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
         std::vector<uint8_t> data;
     };
     std::vector<MidiMessage> messages;
+    if (project) {
+        for (const auto& point : project->tempoMap) {
+            if (point.beat <= 0.0) continue;
+            const uint32_t tick = static_cast<uint32_t>(point.beat * TPQ + 0.5);
+            const uint32_t micros = static_cast<uint32_t>(60000000.0 / point.bpm);
+            messages.push_back({tick, -1, {0xFF, 0x51, 0x03,
+                static_cast<uint8_t>((micros >> 16) & 0xFF),
+                static_cast<uint8_t>((micros >> 8) & 0xFF),
+                static_cast<uint8_t>(micros & 0xFF)}});
+        }
+    }
 
     auto melodicChannel = [](InstrumentType instrument) {
         int channel = static_cast<int>(instrument);
@@ -484,6 +636,14 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
     out.write("MTrk", 4);
     writeBE32(static_cast<uint32_t>(track.size()));
     out.write(reinterpret_cast<const char*>(track.data()), track.size());
+}
+
+void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+    writeMidiImpl(filename, events, cfg, nullptr);
+}
+
+void writeMidi(const std::string& filename, const Project& project) {
+    writeMidiImpl(filename, project.renderEvents(), project.config, &project);
 }
 
 } // namespace lyra

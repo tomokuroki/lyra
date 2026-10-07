@@ -1,0 +1,18 @@
+# Parametric EQ, modulation effects, expander, and de-esser.
+tempo 118
+sound modern
+
+track effects {
+  osc saw level=52
+  osc pink_noise level=8
+  adsr 0.01 0.18 65 0.2
+  fx parametric_eq frequency=1800 gain=5 q=1.2 wet=100
+  fx flanger rate=0.24 delay=1.5 depth=2.8 feedback=0.42 wet=38
+  fx phaser rate=0.31 depth=0.72 stages=6 wet=32
+  fx expander threshold=-38 ratio=2 wet=100
+  fx de_esser frequency=6200 threshold=-28 ratio=5 wet=70
+  note C4 1
+  note E4 1
+  note G4 1
+  note B4 1
+}

@@ -648,8 +648,10 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             std::map<std::string, std::string> macroLocals = locals;
             for (size_t p = 0; p < args.size(); ++p)
                 macroLocals[macroIt->second.params[p]] = resolve(args[p]);
+            if (kind == "play") output.push_back("patternbegin " + match[2].str());
             auto expanded = expand(macroIt->second.body, baseDir, macroLocals, transpose);
             output.insert(output.end(), expanded.begin(), expanded.end());
+            if (kind == "play") output.push_back("patternend");
             continue;
         }
 
@@ -660,6 +662,15 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             auto expanded = expand(block.first, baseDir, locals, transpose);
             output.insert(output.end(), expanded.begin(), expanded.end());
             output.push_back("}");
+            continue;
+        }
+
+        if (std::regex_match(line, match,
+            std::regex(R"(^(clip|sample)\s+\"([^\"]+)\"(.*)$)", std::regex::icase))) {
+            std::filesystem::path asset(match[2].str());
+            if (asset.is_relative()) asset = baseDir / asset;
+            output.push_back(toLower(match[1].str()) + " \"" +
+                std::filesystem::absolute(asset).lexically_normal().string() + "\"" + match[3].str());
             continue;
         }
 

@@ -1,9 +1,17 @@
 #include "synth.hpp"
+#include "dsp.hpp"
+#include "audio_file.hpp"
 #include <cmath>
 
 namespace lyra {
 
 static double sampleWave(WaveType wave, double phase, double t) {
+    auto noiseAt = [](int64_t index) {
+        uint32_t x = static_cast<uint32_t>(index) * 747796405u + 2891336453u;
+        x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+        x = (x >> 22u) ^ x;
+        return static_cast<int32_t>(x) / 2147483648.0;
+    };
     switch (wave) {
         case WaveType::Sine:     return std::sin(2.0 * PI * phase);
         case WaveType::Square:   return phase < 0.5 ? 1.0 : -1.0;
@@ -11,10 +19,35 @@ static double sampleWave(WaveType wave, double phase, double t) {
         case WaveType::Saw:      return 2.0 * phase - 1.0;
         case WaveType::Pulse:    return phase < 0.25 ? 1.0 : -1.0;
         case WaveType::Noise: {
-            uint32_t x = static_cast<uint32_t>(t * 44100.0 * 7.0 + phase * 1e6);
-            x ^= x << 13;
-            x ^= x >> 17;
-            x ^= x << 5;
+            return noiseAt(static_cast<int64_t>(t * 44100.0 * 7.0 + phase * 1e6));
+        }
+        case WaveType::PinkNoise: {
+            const int64_t index = static_cast<int64_t>(t * 44100.0);
+            return 0.52 * noiseAt(index) + 0.26 * noiseAt(index / 2)
+                 + 0.14 * noiseAt(index / 4) + 0.08 * noiseAt(index / 8);
+        }
+        case WaveType::BrownNoise: {
+            const double position = t * 180.0;
+            const int64_t index = static_cast<int64_t>(std::floor(position));
+            const double fraction = position - index;
+            return noiseAt(index) * (1.0 - fraction) + noiseAt(index + 1) * fraction;
+        }
+        case WaveType::BlueNoise: {
+            const int64_t index = static_cast<int64_t>(t * 44100.0);
+            return std::clamp((noiseAt(index) - noiseAt(index - 1)) * 0.7, -1.0, 1.0);
+        }
+    }
+    return 0.0;
+}
+
+static double lfoValue(const LfoRoute& route, double t) {
+    double phase = std::fmod(std::max(0.0, t * route.rateHz), 1.0);
+    switch (route.wave) {
+        case LfoWave::Sine: return std::sin(2.0 * PI * phase);
+        case LfoWave::Triangle: return 1.0 - 4.0 * std::fabs(phase - 0.5);
+        case LfoWave::Random: {
+            uint32_t x = static_cast<uint32_t>(std::floor(t * route.rateHz + 1.0)) * 747796405u + 2891336453u;
+            x ^= x >> 16; x *= 2246822519u; x ^= x >> 13;
             return static_cast<int32_t>(x) / 2147483648.0;
         }
     }
@@ -95,6 +128,18 @@ static double instrumentEnvelope(const NoteEvent& ev, double t, double duration)
     }
     if (ev.attack >= 0.0) attack = ev.attack;
     if (ev.release >= 0.0) release = ev.release;
+    if (ev.decay >= 0.0 && ev.sustain >= 0.0) {
+        const double sustainLevel = std::clamp(ev.sustain, 0.0, 1.0);
+        double env;
+        if (attack > 0.0 && t < attack) env = t / attack;
+        else if (ev.decay > 0.0 && t < attack + ev.decay) {
+            const double position = (t - attack) / ev.decay;
+            env = 1.0 + (sustainLevel - 1.0) * std::clamp(position, 0.0, 1.0);
+        } else env = sustainLevel;
+        if (release > 0.0 && t > duration - release)
+            env *= std::max(0.0, (duration - t) / release);
+        return env;
+    }
     double env = sustain;
     if (t < attack) env *= t / attack;
     if (t > duration - release) env *= std::max(0.0, (duration - t) / release);
@@ -219,8 +264,10 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
     }
 }
 
-AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
-    if (events.empty()) return AudioBuffer{{}, cfg.channels};
+static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, const Config& cfg,
+                                       const Project* project, bool raw = false,
+                                       size_t forcedFrames = 0) {
+    if (events.empty() && forcedFrames == 0) return AudioBuffer{{}, cfg.channels};
 
     double maxBeat = 0.0;
     for (const auto& e : events)
@@ -229,14 +276,18 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
     double beatSec = 60.0 / cfg.tempo;
     double effectTail = (cfg.reverb > 0.0 ? 1.4 : 0.0)
                       + (cfg.delayMix > 0.0 ? cfg.delayBeats * beatSec * 2.0 : 0.0);
-    double totalSec = maxBeat * beatSec + effectTail;
-    size_t totalSamples = static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
+    double totalSec = (project ? project->beatToSeconds(maxBeat) : maxBeat * beatSec) + effectTail;
+    size_t totalSamples = forcedFrames > 0 ? forcedFrames
+        : static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
     std::vector<double> mixL(totalSamples, 0.0);
     std::vector<double> mixR(totalSamples, 0.0);
 
     for (const auto& ev : events) {
-        size_t startS = static_cast<size_t>(ev.startBeat * (60.0 / cfg.tempo) * cfg.sampleRate);
-        size_t nS = static_cast<size_t>(ev.durationBeats * (60.0 / cfg.tempo) * cfg.sampleRate + 0.5);
+        const double startSec = project ? project->beatToSeconds(ev.startBeat) : ev.startBeat * beatSec;
+        const double durationSec = project ? project->durationSeconds(ev.startBeat, ev.durationBeats)
+                                           : ev.durationBeats * beatSec;
+        size_t startS = static_cast<size_t>(startSec * cfg.sampleRate + 0.5);
+        size_t nS = static_cast<size_t>(durationSec * cfg.sampleRate + 0.5);
         if (nS == 0) continue;
 
         if (ev.drum != DrumType::None) {
@@ -244,36 +295,102 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
             continue;
         }
 
-        size_t voices = std::min(ev.freqs.size(), size_t(8));
-        if (voices == 0) continue;
+        size_t notes = std::min(ev.freqs.size(), size_t(16));
+        if (notes == 0) continue;
 
-        double durSec = ev.durationBeats * (60.0 / cfg.tempo);
-        double filterState = 0.0;
-        double filterAlpha = ev.cutoff > 0.0
-            ? std::min(1.0, 1.0 - std::exp(-2.0 * PI * ev.cutoff / cfg.sampleRate)) : 1.0;
+        double durSec = durationSec;
+        double filterLow = 0.0;
+        double filterBand = 0.0;
 
         for (size_t i = 0; i < nS && startS + i < totalSamples; ++i) {
             double t = static_cast<double>(i) / cfg.sampleRate;
             double env = instrumentEnvelope(ev, t, durSec);
+            const double progress = durSec > 0.0 ? std::clamp(t / durSec, 0.0, 1.0) : 0.0;
+            double pitchMod = ev.pitchEnvelopeStart
+                + (ev.pitchEnvelopeEnd - ev.pitchEnvelopeStart) * progress;
+            double cutoff = ev.cutoff;
+            if (ev.filterEnvelopeStart > 0.0 || ev.filterEnvelopeEnd > 0.0)
+                cutoff = ev.filterEnvelopeStart + (ev.filterEnvelopeEnd - ev.filterEnvelopeStart) * progress;
+            double pan = ev.pan;
+            double amplitudeMod = 1.0;
+            for (const auto& route : ev.lfoRoutes) {
+                const double value = lfoValue(route, t) * route.amount;
+                if (route.target == ModTarget::Pitch) pitchMod += value;
+                else if (route.target == ModTarget::Cutoff) cutoff += value;
+                else if (route.target == ModTarget::Pan) pan += value;
+                else if (route.target == ModTarget::Amp) amplitudeMod *= std::max(0.0, 1.0 + value);
+            }
 
             double sample = 0.0;
-            for (size_t v = 0; v < voices; ++v) {
-                double f = ev.freqs[v];
-                if (f <= 0.0) continue;
-                double phase = std::fmod(f * t, 1.0);
-                sample += instrumentSample(ev, phase, t, f, cfg.soundMode) * (1.0 / voices);
+            const size_t oscillatorCount = ev.oscillators.empty() ? 1 : ev.oscillators.size();
+            double oscillatorLevels = ev.oscillators.empty() ? 1.0 : 0.0;
+            for (const auto& oscillator : ev.oscillators) oscillatorLevels += oscillator.level;
+            oscillatorLevels = std::max(oscillatorLevels, 1e-9);
+            for (size_t noteIndex = 0; noteIndex < notes; ++noteIndex) {
+                const double baseFrequency = ev.freqs[noteIndex];
+                if (baseFrequency <= 0.0) continue;
+                for (size_t oscillatorIndex = 0; oscillatorIndex < oscillatorCount; ++oscillatorIndex) {
+                    NoteEvent voiceEvent = ev;
+                    double level = 1.0;
+                    double offsetCents = 0.0;
+                    if (!ev.oscillators.empty()) {
+                        const auto& oscillator = ev.oscillators[oscillatorIndex];
+                        voiceEvent.wave = oscillator.wave;
+                        level = oscillator.level;
+                        offsetCents = oscillator.detuneCents + oscillator.semitones * 100.0;
+                    }
+                    const int unison = std::max(1, ev.unisonVoices);
+                    for (int unisonIndex = 0; unisonIndex < unison; ++unisonIndex) {
+                        const double spread = unison == 1 ? 0.0
+                            : (2.0 * unisonIndex / static_cast<double>(unison - 1) - 1.0) * ev.unisonDetuneCents;
+                        const double frequency = baseFrequency * std::pow(2.0,
+                            (offsetCents + spread + pitchMod * 100.0) / 1200.0);
+                        double phase = frequency * t;
+                        if (ev.fmRatio > 0.0 && ev.fmAmount > 0.0)
+                            phase += std::sin(2.0 * PI * frequency * ev.fmRatio * t) * ev.fmAmount / (2.0 * PI);
+                        phase -= std::floor(phase);
+                        sample += instrumentSample(voiceEvent, phase, t, frequency, cfg.soundMode)
+                            * level / (notes * oscillatorLevels * unison);
+                    }
+                }
             }
+            if (ev.amRate > 0.0 && ev.amDepth > 0.0)
+                sample *= (1.0 - ev.amDepth) + ev.amDepth * (0.5 + 0.5 * std::sin(2.0 * PI * ev.amRate * t));
             if (ev.drive > 0.0) {
                 double amount = 1.0 + ev.drive * 5.0;
                 sample = std::tanh(sample * amount) / std::tanh(amount);
             }
-            filterState += filterAlpha * (sample - filterState);
-            sample = filterState;
-            double panAngle = (ev.pan + 1.0) * PI * 0.25;
-            double value = sample * env * ev.volume;
+            if (cutoff > 0.0) {
+                const double coefficient = std::clamp(2.0 * std::sin(PI * std::min(cutoff, cfg.sampleRate * 0.45)
+                    / cfg.sampleRate), 0.0, 0.99);
+                const double damping = 1.5 - std::clamp(ev.resonance, 0.0, 1.0) * 1.4;
+                filterLow += coefficient * filterBand;
+                const double high = sample - filterLow - damping * filterBand;
+                filterBand += coefficient * high;
+                if (ev.filterType == FilterType::LowPass) sample = filterLow;
+                else if (ev.filterType == FilterType::HighPass) sample = high;
+                else if (ev.filterType == FilterType::BandPass) sample = filterBand;
+                else sample = filterLow + high;
+            }
+            double panAngle = (std::clamp(pan, -1.0, 1.0) + 1.0) * PI * 0.25;
+            double value = sample * env * ev.volume * amplitudeMod;
             mixL[startS + i] += value * std::cos(panAngle);
             mixR[startS + i] += value * std::sin(panAngle);
         }
+    }
+
+    if (raw) {
+        AudioBuffer out;
+        out.channels = cfg.channels;
+        out.samples.resize(totalSamples * static_cast<size_t>(out.channels));
+        for (size_t i = 0; i < totalSamples; ++i) {
+            if (out.channels == 1) out.samples[i] = static_cast<float>((mixL[i] + mixR[i]) * 0.5);
+            else {
+                out.samples[i * 2] = static_cast<float>(mixL[i]);
+                out.samples[i * 2 + 1] = static_cast<float>(mixR[i]);
+            }
+        }
+        return out;
     }
 
     auto processChannel = [&](std::vector<double>& mix) {
@@ -413,6 +530,145 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
         }
     }
     return out;
+}
+
+AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
+    return generateSamplesImpl(events, cfg, nullptr);
+}
+
+static void renderAudioClip(AudioBuffer& target, const AudioClip& clip, const Project& project,
+                            const MixerChannel& mixer) {
+    const SourceAudio source = loadAudioFile(clip.path);
+    if (source.samples.empty() || source.channels <= 0 || source.sampleRate <= 0) return;
+    const size_t sourceFrames = source.samples.size() / static_cast<size_t>(source.channels);
+    const size_t trimStart = std::min(sourceFrames, static_cast<size_t>(clip.trimStartSeconds * source.sampleRate));
+    const size_t trimEnd = clip.trimEndSeconds < 0.0 ? sourceFrames
+        : std::min(sourceFrames, static_cast<size_t>(clip.trimEndSeconds * source.sampleRate));
+    if (trimEnd <= trimStart) return;
+    const size_t trimmedFrames = trimEnd - trimStart;
+    const size_t startFrame = static_cast<size_t>(project.beatToSeconds(clip.startBeat) * project.config.sampleRate + 0.5);
+    const size_t outputFrames = static_cast<size_t>(project.durationSeconds(clip.startBeat, clip.lengthBeats)
+                                                    * project.config.sampleRate + 0.5);
+    const double pitchFactor = std::pow(2.0, clip.pitchSemitones / 12.0);
+    const double step = trimmedFrames / static_cast<double>(std::max<size_t>(1, outputFrames))
+                      * pitchFactor / clip.stretch;
+    const size_t crossfadeFrames = static_cast<size_t>(clip.crossfadeMs * source.sampleRate / 1000.0);
+    const size_t fadeInFrames = static_cast<size_t>(project.durationSeconds(clip.startBeat, clip.fadeInBeats)
+                                                    * project.config.sampleRate + 0.5);
+    const size_t fadeOutFrames = static_cast<size_t>(project.durationSeconds(
+        clip.startBeat + std::max(0.0, clip.lengthBeats - clip.fadeOutBeats), clip.fadeOutBeats)
+        * project.config.sampleRate + 0.5);
+    const double panAngle = (std::clamp(mixer.pan, -1.0, 1.0) + 1.0) * PI * 0.25;
+    for (size_t output = 0; output < outputFrames && startFrame + output < target.samples.size() / target.channels; ++output) {
+        double position = output * step;
+        if (clip.loop) position = std::fmod(position, static_cast<double>(trimmedFrames));
+        else if (position >= trimmedFrames) break;
+        if (clip.reverse) position = (trimmedFrames - 1) - position;
+        const size_t leftIndex = static_cast<size_t>(std::floor(position));
+        const size_t rightIndex = std::min(trimmedFrames - 1, leftIndex + 1);
+        const double fraction = position - leftIndex;
+        double gain = clip.gain * mixer.gain;
+        if (fadeInFrames > 0 && output < fadeInFrames) gain *= output / static_cast<double>(fadeInFrames);
+        if (fadeOutFrames > 0 && output + fadeOutFrames > outputFrames)
+            gain *= (outputFrames - output) / static_cast<double>(fadeOutFrames);
+        for (int channel = 0; channel < target.channels; ++channel) {
+            const int sourceChannel = source.channels == 1 ? 0 : std::min(channel, source.channels - 1);
+            double value = source.samples[(trimStart + leftIndex) * source.channels + sourceChannel] * (1.0 - fraction)
+                         + source.samples[(trimStart + rightIndex) * source.channels + sourceChannel] * fraction;
+            if (clip.loop && crossfadeFrames > 0 && !clip.reverse && leftIndex + crossfadeFrames >= trimmedFrames) {
+                const double blend = (leftIndex + crossfadeFrames - trimmedFrames) / static_cast<double>(crossfadeFrames);
+                const size_t wrap = (leftIndex + crossfadeFrames - trimmedFrames) % trimmedFrames;
+                const double wrapped = source.samples[(trimStart + wrap) * source.channels + sourceChannel];
+                value = value * (1.0 - blend) + wrapped * blend;
+            }
+            const double channelGain = target.channels == 2
+                ? gain * (channel == 0 ? std::cos(panAngle) : std::sin(panAngle)) : gain;
+            target.samples[(startFrame + output) * target.channels + channel] += static_cast<float>(value * channelGain);
+        }
+    }
+}
+
+AudioBuffer generateSamples(const Project& project) {
+    const bool hasGraph = !project.buses.empty() || !project.master.inserts.empty() ||
+        std::any_of(project.tracks.begin(), project.tracks.end(), [](const Track& track) {
+            return !track.inserts.empty() || !track.sends.empty() || !track.sidechains.empty() || !track.clips.empty();
+        });
+    if (!hasGraph) return generateSamplesImpl(project.renderEvents(), project.config, &project);
+
+    const auto flattened = project.renderEvents();
+    const size_t frames = static_cast<size_t>((project.beatToSeconds(project.durationBeats()) + 3.0)
+                                               * project.config.sampleRate + 0.5);
+    AudioBuffer master{std::vector<float>(frames * static_cast<size_t>(project.config.channels), 0.0f),
+                       project.config.channels};
+    std::vector<AudioBuffer> busAudio(project.buses.size(),
+        AudioBuffer{std::vector<float>(master.samples.size(), 0.0f), project.config.channels});
+    std::vector<AudioBuffer> trackAudio(project.tracks.size(),
+        AudioBuffer{std::vector<float>(master.samples.size(), 0.0f), project.config.channels});
+
+    auto addScaled = [](AudioBuffer& target, const AudioBuffer& source, double gain) {
+        const size_t count = std::min(target.samples.size(), source.samples.size());
+        for (size_t i = 0; i < count; ++i)
+            target.samples[i] += static_cast<float>(source.samples[i] * gain);
+    };
+
+    for (size_t trackIndex = 0; trackIndex < project.tracks.size(); ++trackIndex) {
+        const auto& track = project.tracks[trackIndex];
+        const bool hasSolo = std::any_of(project.tracks.begin(), project.tracks.end(),
+            [](const Track& candidate) { return candidate.mixer.solo; });
+        if (track.mixer.mute || (hasSolo && !track.mixer.solo)) continue;
+        std::vector<NoteEvent> trackEvents;
+        for (const auto& event : flattened)
+            if (event.trackId == track.id) trackEvents.push_back(event);
+        if (!trackEvents.empty())
+            trackAudio[trackIndex] = generateSamplesImpl(trackEvents, project.config, &project, true, frames);
+        for (const auto& clip : track.clips)
+            renderAudioClip(trackAudio[trackIndex], clip, project, track.mixer);
+        if (trackEvents.empty() && track.clips.empty()) continue;
+        processEffectChain(trackAudio[trackIndex], track.inserts, project.config.sampleRate);
+    }
+
+    for (size_t trackIndex = 0; trackIndex < project.tracks.size(); ++trackIndex) {
+        const auto& track = project.tracks[trackIndex];
+        for (const auto& sidechain : track.sidechains) {
+            auto source = std::find_if(project.tracks.begin(), project.tracks.end(),
+                [&](const Track& candidate) { return candidate.id == sidechain.sourceTrackId; });
+            if (source != project.tracks.end())
+                processSidechain(trackAudio[trackIndex],
+                    trackAudio[static_cast<size_t>(std::distance(project.tracks.begin(), source))],
+                    sidechain, project.config.sampleRate);
+        }
+        addScaled(master, trackAudio[trackIndex], 1.0);
+        for (const auto& send : track.sends) {
+            auto bus = std::find_if(project.buses.begin(), project.buses.end(),
+                [&](const Bus& candidate) { return candidate.id == send.busId; });
+            if (bus != project.buses.end())
+                addScaled(busAudio[static_cast<size_t>(std::distance(project.buses.begin(), bus))],
+                          trackAudio[trackIndex], send.amount);
+        }
+    }
+
+    for (size_t index = 0; index < project.buses.size(); ++index) {
+        processEffectChain(busAudio[index], project.buses[index].inserts, project.config.sampleRate);
+        addScaled(master, busAudio[index], project.buses[index].mixer.gain);
+    }
+    if (project.config.delayMix > 0.0) {
+        Effect delay{EffectType::Delay, {{"time", project.config.delayBeats * 60000.0 / project.config.tempo},
+                                         {"feedback", 0.38}}, project.config.delayMix};
+        processEffect(master, delay, project.config.sampleRate);
+    }
+    if (project.config.reverb > 0.0) {
+        Effect reverb{EffectType::Reverb, {}, project.config.reverb};
+        processEffect(master, reverb, project.config.sampleRate);
+    }
+    processEffectChain(master, project.master.inserts, project.config.sampleRate);
+
+    double peak = 0.0;
+    for (float sample : master.samples) peak = std::max(peak, std::fabs(static_cast<double>(sample)));
+    const double target = std::pow(10.0, project.config.masterPeakDb / 20.0);
+    const double gain = peak > 1e-12 ? target / peak : 1.0;
+    for (float& sample : master.samples)
+        sample = static_cast<float>(std::clamp(sample * gain, -1.0, 1.0));
+    return master;
 }
 
 } // namespace lyra

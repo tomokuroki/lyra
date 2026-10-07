@@ -1,0 +1,16 @@
+# Scales, scale lock, inversions, arpeggiation and deterministic variation.
+tempo 118
+seed 4242
+key D dorian
+scale_lock on
+sound modern
+
+track generative {
+  wave triangle
+  chance 65
+  humanize 0.015 8
+  randomize pitch=0.8 velocity=6 pan=30
+  note C#4 0.5
+  arp Dm7 4 2 0.25 updown inversion=1
+  harmony Dm9 3 1.5 inversion 2
+}

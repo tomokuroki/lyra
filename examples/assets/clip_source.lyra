@@ -1,0 +1,10 @@
+tempo 120
+sound modern
+track source {
+  wave sine
+  adsr 0.005 0.08 55 0.08
+  note C5 0.5
+  note E5 0.5
+  note G5 0.5
+  note C6 0.5
+}

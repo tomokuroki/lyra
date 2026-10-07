@@ -3,6 +3,7 @@
 #include "synth.hpp"
 #include "export.hpp"
 #include "frontend.hpp"
+#include "analysis.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -21,12 +22,15 @@ Usage:
   )" << prog << R"( check <file.lyra>            Validate without rendering
   )" << prog << R"( test <file-or-directory>      Check every discovered song
   )" << prog << R"( expand <file.lyra>           Show lowered Lyra commands
+  )" << prog << R"( analyze <file.lyra> [report] Render and write meter/analyzer JSON
   )" << prog << R"( init [file.lyra]             Create a starter song
 
 Options:
-  -f, --format <format>     wav, midi, aiff, json, flac, mp3, ogg (default: wav)
-  -r, --rate <Hz>           Sample rate: 44100, 48000, or 96000
-  -b, --bits 8|16|24        PCM bit depth for WAV and AIFF
+  -f, --format <format>     wav, midi, aiff, json, flac, mp3, ogg, aac
+  -r, --rate <Hz>           44100, 48000, 96000, or 192000
+  -b, --bits 8|16|24|32     WAV bit depth (32 is IEEE float)
+      --stems <directory>   Also render every mixer track to WAV
+      --analysis <file>     Also write meter/spectrum/waveform JSON
   -w, --wave <type>         Default waveform
   -s, --sound <mode>        Sound era/style (see list below)
   -v, --version             Show Lyra version
@@ -58,7 +62,9 @@ int main(int argc, char* argv[]) {
     Config cfg;
     std::string inputFile;
     std::string outputFile;
-    enum class Command { Run, Check, Expand, Test };
+    std::string stemsDirectory;
+    std::string analysisFile;
+    enum class Command { Run, Check, Expand, Test, Analyze };
     Command command = Command::Run;
     int firstArg = 1;
 
@@ -74,6 +80,9 @@ int main(int argc, char* argv[]) {
             firstArg = 2;
         } else if (first == "expand") {
             command = Command::Expand;
+            firstArg = 2;
+        } else if (first == "analyze") {
+            command = Command::Analyze;
             firstArg = 2;
         } else if (first == "init") {
             std::string filename = argc > 2 ? argv[2] : "main.lyra";
@@ -150,18 +159,20 @@ song MyFirstSong {
         }
         else if ((arg == "-r" || arg == "--rate") && i + 1 < argc) {
             cfg.sampleRate = std::stoi(argv[++i]);
-            if (cfg.sampleRate != 44100 && cfg.sampleRate != 48000 && cfg.sampleRate != 96000) {
-                std::cerr << "Sample rate must be 44100, 48000, or 96000\n";
+            if (cfg.sampleRate != 44100 && cfg.sampleRate != 48000 && cfg.sampleRate != 96000 && cfg.sampleRate != 192000) {
+                std::cerr << "Sample rate must be 44100, 48000, 96000, or 192000\n";
                 return 1;
             }
         }
         else if ((arg == "-b" || arg == "--bits") && i + 1 < argc) {
             cfg.bits = std::stoi(argv[++i]);
-            if (cfg.bits != 8 && cfg.bits != 16 && cfg.bits != 24) {
-                std::cerr << "Bit depth must be 8, 16, or 24\n";
+            if (cfg.bits != 8 && cfg.bits != 16 && cfg.bits != 24 && cfg.bits != 32) {
+                std::cerr << "Bit depth must be 8, 16, 24, or 32\n";
                 return 1;
             }
         }
+        else if (arg == "--stems" && i + 1 < argc) stemsDirectory = argv[++i];
+        else if (arg == "--analysis" && i + 1 < argc) analysisFile = argv[++i];
         else if ((arg == "-w" || arg == "--wave") && i + 1 < argc) {
             cfg.wave = parseWave(argv[++i]);
         }
@@ -191,6 +202,7 @@ song MyFirstSong {
         size_t dot = base.find_last_of('.');
         if (dot != std::string::npos) base = base.substr(0, dot);
         outputFile = base + exportFormatExtension(cfg.format);
+        if (command == Command::Analyze) outputFile = base + ".analysis.json";
     }
 
     try {
@@ -241,18 +253,47 @@ song MyFirstSong {
             return 0;
         }
 
+        if (command == Command::Analyze) {
+            const auto audio = generateSamples(parser.project);
+            const auto report = analyzeAudio(audio, parser.config.sampleRate);
+            writeAnalysisJson(outputFile, report, parser.config.sampleRate, audio.channels);
+            std::cout << "Analysis | peak=" << report.peakDbfs << " dBFS | RMS=" << report.rmsDbfs
+                      << " dBFS | LUFS=" << report.integratedLufs
+                      << " | correlation=" << report.stereoCorrelation
+                      << " | clipped=" << report.clippedSamples << "\nCreated: " << outputFile << std::endl;
+            return 0;
+        }
+
         if (cfg.format == ExportFormat::MIDI) {
-            writeMidi(outputFile, parser.events, parser.config);
+            writeMidi(outputFile, parser.project);
         } else if (cfg.format == ExportFormat::JSON) {
-            writeJson(outputFile, parser.events, parser.config);
+            writeJson(outputFile, parser.project);
         } else {
-            auto audio = generateSamples(parser.events, parser.config);
+            auto audio = generateSamples(parser.project);
             if (cfg.format == ExportFormat::WAV)
                 writeWav(outputFile, audio, parser.config);
             else if (cfg.format == ExportFormat::AIFF)
                 writeAiff(outputFile, audio, parser.config);
             else
                 writeCompressedAudio(outputFile, audio, parser.config, cfg.format);
+            if (!analysisFile.empty())
+                writeAnalysisJson(analysisFile, analyzeAudio(audio, parser.config.sampleRate),
+                                  parser.config.sampleRate, audio.channels);
+            if (!stemsDirectory.empty()) {
+                std::filesystem::create_directories(stemsDirectory);
+                for (const auto& sourceTrack : parser.project.tracks) {
+                    Project stem = parser.project;
+                    for (auto& track : stem.tracks) {
+                        track.mixer.mute = track.id != sourceTrack.id;
+                        track.mixer.solo = false;
+                    }
+                    std::string safe = sourceTrack.id;
+                    for (char& c : safe) if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '_';
+                    const auto stemPath = std::filesystem::path(stemsDirectory) / (safe + ".wav");
+                    writeWav(stemPath.string(), generateSamples(stem), stem.config);
+                    std::cout << "Stem: " << stemPath.string() << std::endl;
+                }
+            }
             double sec = audio.samples.size()
                        / static_cast<double>(parser.config.sampleRate * audio.channels);
             std::cout << "Created: " << outputFile << " (" << sec << "s)" << std::endl;

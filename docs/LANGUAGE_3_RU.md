@@ -104,6 +104,220 @@ track lead {
 Автоматизация применяется детерминированно при построении render-view, поэтому
 один и тот же проект всегда создаёт одинаковый результат.
 
+## Timeline: tempo map, grid, swing и sections
+
+```lyra
+tempo 120
+tempo 96 at 16
+grid 1/16
+swing 60
+section intro at 0 length 16
+section verse at 16 length 32
+
+track drums {
+  at 16
+  play verse_drums()
+}
+```
+
+`tempo ... at ...` меняет реальную длительность и позицию событий при аудио-
+рендере. `grid` принимает степени двойки от `1/1` до `1/128` и необязательное
+слово `triplet`. `swing 50` означает прямой ритм, значения до `75` задерживают
+каждую вторую ячейку. Sections сохраняются в Project IR и одновременно создают
+маркеры начала частей.
+`at <beat>` перемещает курсор дорожки, а каждый `play pattern(...)` сохраняется
+как отдельное размещение в `arrangement`, не теряя при этом совместимый поток
+нот для существующего синтезатора.
+
+## DSP graph: inserts, buses, sends и master
+
+```lyra
+bus space {
+  gain -6
+  fx chorus time=16 feedback=0.2 wet=25
+  fx reverb time=79 feedback=0.55 wet=45
+}
+
+master {
+  fx compressor threshold=-14 ratio=3 wet=100
+  fx limiter threshold=-1 wet=100
+}
+
+track lead {
+  fx highpass cutoff=90 wet=100
+  fx saturation drive=2.5 wet=65
+  send space 28
+  note C4 1
+}
+```
+
+Порядок строк `fx` является порядком обработки. Send снимается после insert-
+цепочки дорожки, обрабатывается цепочкой bus и смешивается с master. Поддержаны
+`lowpass`, `highpass`, `parametric_eq`, `distortion`, `saturation`,
+`bitcrusher`, `chorus`, `flanger`, `phaser`, `delay`, `reverb`, `compressor`,
+`limiter`, `gate`, `expander`, `de_esser`, `stereo_width` и `auto_pan`. Общий
+параметр `wet` задаётся в процентах; остальные параметры передаются как
+`name=value`.
+
+Исполняемый пример: `examples/lyra3/dsp_graph.lyra`.
+
+Sidechain задаётся на дорожке-приёмнике и ссылается на именованную дорожку-
+источник:
+
+```lyra
+track bass {
+  sidechain drums amount=100 threshold=-30 ratio=8 attack=2 release=180
+  note C2 4
+}
+```
+
+Envelope follower использует отдельные attack/release и действительно изменяет
+PCM; интеграционный тест сравнивает WAV с маршрутом и без него.
+
+Расширенный набор insert-эффектов использует тот же порядок обработки:
+
+```lyra
+track texture {
+  fx parametric_eq frequency=1800 gain=5 q=1.2 wet=100
+  fx flanger rate=0.24 delay=1.5 depth=2.8 feedback=0.42 wet=38
+  fx phaser rate=0.31 depth=0.72 stages=6 wet=32
+  fx expander threshold=-38 ratio=2 wet=100
+  fx de_esser frequency=6200 threshold=-28 ratio=5 wet=70
+  note C4 4
+}
+```
+
+Parametric EQ — peaking biquad, `gain` задаётся в dB. У flanger `delay` и
+`depth` измеряются в ms, `rate` — в Hz. Phaser принимает 2–12 all-pass stages.
+Expander ослабляет сигнал ниже threshold, de-esser динамически уменьшает
+высокочастотную составляющую выше threshold. Каждый эффект отдельно проверяется
+сравнением хеша полученного PCM.
+
+Исполняемый пример: `examples/lyra3/effect_suite.lyra`.
+
+## Multi-oscillator synth, unison, FM/AM и ADSR
+
+```lyra
+track pad {
+  osc saw level=65 detune=-4
+  osc square level=25 detune=5 semitones=-12
+  osc sine level=20 semitones=12
+  unison 8 detune=14
+  adsr 0.03 0.25 62 0.35
+  fm 2 0.7
+  am 3.5 18
+  chord C4 E4 G4 B4 2
+}
+```
+
+`osc` добавляет генераторы в порядке объявления. `level` задаётся в процентах,
+`detune` — в центах, `semitones` — в полутонах. `unison` принимает
+1/2/4/8/16 голосов. `fm` принимает ratio и modulation index, `am` — частоту
+и глубину в процентах. `adsr` использует секунды для A/D/R и проценты для S.
+
+Исполняемый пример: `examples/lyra3/synth_engine.lyra`.
+
+## Scales, chord inversions, arpeggiator и генеративность
+
+```lyra
+seed 4242
+key D dorian
+scale_lock on
+
+track generative {
+  chance 65
+  humanize 0.015 8
+  randomize pitch=0.8 velocity=6 pan=30
+  arp Dm7 4 2 0.25 updown inversion=1
+  harmony Dm9 3 1.5 inversion 2
+}
+```
+
+Доступны `major`, `minor`, `harmonic_minor`, `melodic_minor`, `dorian`,
+`phrygian`, `lydian`, `mixolydian`, `locrian`, `major_pentatonic`,
+`minor_pentatonic`, `blues` и `chromatic`. `degree` использует выбранную
+гамму, а `scale_lock on` притягивает созданные высоты к ней.
+
+Chord symbols дополнительно поддерживают `6`, `m6`, `9`, `maj9`, `m9`,
+`add9`, `11` и `13`. `arp` принимает направления `up`, `down`, `updown`.
+
+`chance` задаёт вероятность события, `humanize` — максимальное отклонение
+времени в beats и velocity в процентах, `randomize` — диапазоны pitch,
+velocity и pan. PRNG полностью воспроизводим: одинаковый `seed` создаёт
+побитово одинаковый WAV. Это проверяется отдельным интеграционным тестом.
+
+Исполняемый пример: `examples/lyra3/generative_music.lyra`.
+
+## Filters, envelopes и modulation matrix
+
+```lyra
+track texture {
+  osc pink_noise level=14
+  osc saw level=45
+  filter bp 1800 60
+  pitch_env 12 0
+  filter_env 350 5200
+  lfo sine 5 pitch 0.18
+  lfo triangle 0.4 cutoff 900
+  lfo random 2 pan 30
+  note C3 4
+}
+```
+
+`filter` поддерживает `lp`, `hp`, `bp`, `notch`, cutoff в Hz и resonance
+0–100. `pitch_env` задаётся в полутонах, `filter_env` — в Hz. Можно объявить
+несколько LFO и независимо направить их в `pitch`, `cutoff`, `pan` или `amp`.
+Доступны формы `sine`, `triangle`, `random`.
+
+Помимо `noise` осциллятор понимает `pink_noise`, `brown_noise` и `blue_noise`.
+Удаление modulation routes из тестового проекта даёт другой PCM-хеш, поэтому
+маршруты проверяются как звуковая обработка, а не только как синтаксис.
+
+## Sampler и audio clips
+
+```lyra
+track clips {
+  clip "samples/loop.wav" at 0 length=8 trim_start=0.2 trim_end=4.1 fadein=0.1 fadeout=0.2 gain=-6 pitch=3 stretch=1.2 loop=true crossfade=15
+
+  sample "samples/hit.aiff" 1 reverse=true gain=-9
+}
+```
+
+`clip` размещает asset по абсолютному beat, `sample` — в текущем курсоре и
+двигает его на указанную длину. Относительные пути разрешаются относительно
+файла, где команда написана, включая импортированные модули.
+
+Нативно читаются PCM WAV (8/16/24/32 и float32) и AIFF (8/16/24). FLAC, MP3 и
+OGG декодируются через FFmpeg. Поддержаны trim в секундах, fades в beats,
+clip gain в dB, reverse, looping, crossfade, pitch и stretch. Несколько clips
+на одной позиции образуют sample layers. Текущий pitch/stretch использует
+детерминированный resampling; phase-vocoder quality mode ещё находится в TODO.
+
+Исполняемый пример: `examples/lyra3/audio_clips.lyra`.
+
+## Экспорт, стемы и анализ
+
+Lyra экспортирует WAV, MIDI, AIFF и JSON нативно. FLAC, MP3, OGG и AAC/M4A
+кодируются через FFmpeg. WAV поддерживает 44.1/48/96/192 кГц, 8/16/24-bit PCM
+и 32-bit IEEE float.
+
+```text
+lyra -r 192000 -b 32 song.lyra master.wav
+lyra -f aac song.lyra master.m4a
+lyra --stems stems --analysis meters.json song.lyra master.wav
+lyra analyze song.lyra meters.json
+```
+
+`--stems <directory>` создаёт отдельный WAV для каждой mixer track, сохраняя её
+insert-цепочку, sends, bus returns и master processing. `--analysis <file>`
+добавляет к обычному рендеру JSON-отчёт, а команда `analyze` создаёт только этот
+отчёт. В него входят peak/RMS dBFS, приближённый integrated LUFS, stereo
+correlation, число clipped samples, 32 спектральные полосы и 256 waveform peaks.
+Текущий LUFS пригоден для быстрой проверки, но ещё не реализует полный
+BS.1770/EBU R128 gating.
+
+Исполняемый пример: `examples/lyra3/export_mastering.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

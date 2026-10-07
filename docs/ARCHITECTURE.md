@@ -30,7 +30,12 @@ mature language implementations (parser → intermediate representation → back
         │
         ▼
 ┌───────────────┐
-│    Export     │   writes    .wav  or  .mid
+│   Analysis    │   derives deterministic offline meter data
+└───────────────┘
+        │ AudioBuffer + optional report
+        ▼
+┌───────────────┐
+│    Export     │   writes audio, MIDI, events, stems, or analysis JSON
 └───────────────┘
 ```
 
@@ -50,8 +55,11 @@ automation order and mixer values are rejected before rendering.
 | `frontend.*`    | Lyra 2 objects, imports and expansion     | New high-level language constructs   |
 | `common.hpp`    | Types, note→frequency, string helpers     | New enums, shared utilities          |
 | `project.*`     | Song IR, validation and render lowering   | Tracks, arrangement, automation      |
+| `dsp.*`         | Ordered effect processing primitives      | New effects and DSP algorithms       |
+| `audio_file.*`  | WAV/AIFF and optional FFmpeg asset decode  | Samplers and audio clip formats      |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
+| `analysis.*`    | PCM → peak/LUFS/spectrum/waveform report  | Metering and loudness standards      |
 | `export.*`      | PCM / events → audio and data files       | New codecs and event formats         |
 | `main.cpp`      | Command-line interface                    | New flags, batch mode, REPL          |
 
@@ -64,6 +72,14 @@ automation order and mixer values are rejected before rendering.
 4. **Absolute-time model** – events carry their own start beat; the mixer stays simple.
 5. **Fail fast** – invalid programs stop before audio export.
 6. **Easy to build and hack** – `make` or CMake, no complex build system.
+
+## Audio routing
+
+Projects with a routing graph render each track into an independent floating-
+point buffer. Track inserts run in source order. Post-insert sends feed named
+buses; each bus has its own ordered insert chain and gain. Bus returns join the
+dry tracks at the master, whose insert chain runs last. Only then is the master
+peak target applied. This topology keeps routing explicit and deterministic.
 
 ## Future directions
 

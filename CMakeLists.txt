@@ -8,6 +8,9 @@ add_executable(lyra
     src/main.cpp
     src/parser.cpp
     src/project.cpp
+    src/dsp.cpp
+    src/audio_file.cpp
+    src/analysis.cpp
     src/synth.cpp
     src/export.cpp
     src/frontend.cpp
@@ -23,4 +26,47 @@ include(CTest)
 if(BUILD_TESTING)
     add_test(NAME lyra_regression_examples
         COMMAND lyra test "${CMAKE_CURRENT_SOURCE_DIR}/examples")
+    add_test(NAME lyra_timeline_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/project_ir.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_timeline.cmake")
+    add_test(NAME lyra_dsp_graph_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/dsp_graph.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_dsp_graph.cmake")
+    add_test(NAME lyra_synth_engine_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/synth_engine.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_synth_engine.cmake")
+    add_test(NAME lyra_generative_music_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/generative_music.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_generative_music.cmake")
+    add_test(NAME lyra_audio_clips_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/audio_clips.lyra"
+            "-DSOURCE_SONG=${CMAKE_CURRENT_SOURCE_DIR}/examples/assets/clip_source.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_audio_clips.cmake")
+    add_test(NAME lyra_export_mastering
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/export_mastering.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_export_mastering.cmake")
+    add_test(NAME lyra_effect_suite_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/effect_suite.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_effect_suite.cmake")
 endif()

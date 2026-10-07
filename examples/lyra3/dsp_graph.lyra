@@ -1,0 +1,45 @@
+# Ordered insert FX, send bus, and master processing.
+tempo 110
+sound modern
+peak -1
+
+bus space {
+  gain -6
+  fx chorus time=16 feedback=0.2 wet=25
+  fx reverb time=79 feedback=0.55 wet=45
+}
+
+master {
+  fx compressor threshold=-14 ratio=3 wet=100
+  fx limiter threshold=-1 wet=100
+}
+
+track lead {
+  wave saw
+  gain -4
+  fx highpass cutoff=90 wet=100
+  fx saturation drive=2.5 wet=65
+  send space 28
+  note C4 1
+  note E4 1
+  note G4 1
+  chord C4 E4 G4 C5 1
+}
+
+track bass {
+  wave square
+  fx lowpass cutoff=450 wet=100
+  sidechain drums amount=100 threshold=-30 ratio=8 attack=2 release=180
+  note C2 1
+  note C2 1
+  note G1 1
+  note C2 1
+}
+
+track drums {
+  fx bitcrusher bits=10 rate=22050 wet=20
+  kick 0.5
+  hihat 0.5
+  snare 0.5
+  hihat 0.5
+}
