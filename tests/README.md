@@ -22,3 +22,11 @@ The music-theory example covers lists, `for`/`range`, time/key signatures,
 scale degrees, symbolic chords, velocity, envelopes, filtering, and drive.
 The Lyra 3 suite covers mutable collection indexing, `len`, scalar `return`,
 nested expressions, `while`, `break`, and `continue`.
+`project_ir.lyra` additionally covers the Project IR boundary, named tracks,
+track gain, mute, markers, and continuous/step automation.
+
+With a CMake build the complete suite is also registered with CTest:
+
+```text
+ctest --test-dir build -C Release --output-on-failure
+```

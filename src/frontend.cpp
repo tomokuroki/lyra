@@ -251,7 +251,11 @@ std::string Frontend::processFile(const std::string& filename) {
 }
 
 std::vector<std::string> Frontend::processPath(const std::filesystem::path& rawPath) {
-    std::filesystem::path path = std::filesystem::weakly_canonical(rawPath);
+    // Do not require filesystem canonicalisation here.  On sandboxed Windows
+    // installations weakly_canonical can reject a perfectly readable source
+    // file while resolving one of its parents.  An absolute, normalised path
+    // is stable enough for import identity and also preserves useful errors.
+    std::filesystem::path path = std::filesystem::absolute(rawPath).lexically_normal();
     if (importStack_.count(path)) throw std::runtime_error("Circular import: " + path.string());
     if (imported_.count(path)) return {};
     std::ifstream input(path);
@@ -261,7 +265,7 @@ std::vector<std::string> Frontend::processPath(const std::filesystem::path& rawP
     std::vector<std::string> lines;
     std::string line;
     while (std::getline(input, line)) {
-        if (std::regex_match(stripComment(line), std::regex(R"(^}\s*else\s*\{$)", std::regex::icase))) {
+        if (std::regex_match(stripComment(line), std::regex(R"(^\}\s*else\s*\{$)", std::regex::icase))) {
             lines.push_back("}");
             lines.push_back("else {");
         } else lines.push_back(line);

@@ -15,9 +15,14 @@ mature language implementations (parser → intermediate representation → back
         │ expanded command stream
         ▼
 ┌───────────────┐
-│    Parser     │   produces  vector<NoteEvent>
+│    Parser     │   produces a validated Project IR
 └───────────────┘
-        │
+        │ tracks + mixer + markers + automation
+        ▼
+┌───────────────┐
+│  Project IR   │   produces a deterministic render event view
+└───────────────┘
+        │ flattened NoteEvent sequence
         ▼
 ┌───────────────┐
 │    Synth      │   produces  floating-point stereo AudioBuffer
@@ -29,9 +34,14 @@ mature language implementations (parser → intermediate representation → back
 └───────────────┘
 ```
 
-`NoteEvent` is the intermediate representation (IR).  
-Every musical event knows its absolute start time in beats.  
-The synthesizer mixes overlapping events from multiple tracks.
+`Project` is the durable intermediate representation (IR). It owns named
+tracks, mixer channels, markers and automation lanes. `NoteEvent` is the
+small render-level IR: every event retains its track id, lowered-command line and
+absolute start time in beats. The synthesizer and exporters intentionally
+consume the flattened event view, keeping DSP independent of language syntax.
+
+`Project::validate()` is the semantic boundary. Invalid ownership, timing,
+automation order and mixer values are rejected before rendering.
 
 ## Module responsibilities
 
@@ -39,6 +49,7 @@ The synthesizer mixes overlapping events from multiple tracks.
 |-----------------|-------------------------------------------|--------------------------------------|
 | `frontend.*`    | Lyra 2 objects, imports and expansion     | New high-level language constructs   |
 | `common.hpp`    | Types, note→frequency, string helpers     | New enums, shared utilities          |
+| `project.*`     | Song IR, validation and render lowering   | Tracks, arrangement, automation      |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
 | `export.*`      | PCM / events → audio and data files       | New codecs and event formats         |
@@ -49,14 +60,16 @@ The synthesizer mixes overlapping events from multiple tracks.
 1. **Zero-dependency core** – the language and native exporters use only C++17;
    optional compressed export delegates to FFmpeg.
 2. **Single responsibility** – each translation unit does one job.
-3. **Compatible lowering** – Lyra 2 constructs lower to the stable Lyra 1 event language.
+3. **Compatible lowering** – Lyra 2/3 constructs lower to the stable event language.
 4. **Absolute-time model** – events carry their own start beat; the mixer stays simple.
 5. **Fail fast** – invalid programs stop before audio export.
 6. **Easy to build and hack** – `make` or CMake, no complex build system.
 
 ## Future directions
 
-- Source locations and a typed AST for richer diagnostics
+- A typed syntax tree before Project lowering
+- Tempo-map aware sample scheduling
+- Effect graphs, buses and sends in the Project IR
 - Lexical local scopes and return values for runtime functions
 - Real-time playback
 - Plugin system for custom waveforms / effects
