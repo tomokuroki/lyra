@@ -269,7 +269,10 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
         << "  \"tempo\": " << cfg.tempo << ",\n"
         << "  \"time_signature\": [" << cfg.timeNumerator << ", " << cfg.timeDenominator << "],\n"
         << "  \"key\": {\"root\": " << cfg.keyRoot << ", \"mode\": \""
-        << (cfg.keyMinor ? "minor" : "major") << "\"},\n"
+        << (cfg.keyMinor ? "minor" : "major") << "\", \"scale\": \""
+        << scaleTypeToString(cfg.scale) << "\", \"scale_lock\": "
+        << (cfg.scaleLock ? "true" : "false") << "},\n"
+        << "  \"random_seed\": " << cfg.randomSeed << ",\n"
         << "  \"sound\": \"" << soundModeToString(cfg.soundMode) << "\",\n"
         << "  \"sample_rate\": " << cfg.sampleRate << ",\n"
         << "  \"bit_depth\": " << cfg.bits << ",\n"
@@ -372,6 +375,8 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
             << ", \"fm_amount\": " << event.fmAmount
             << ", \"am_rate\": " << event.amRate
             << ", \"am_depth\": " << event.amDepth
+            << ", \"probability\": " << event.probability
+            << ", \"triggered\": " << (event.triggered ? "true" : "false")
             << ", \"oscillators\": [";
         for (size_t oscillator = 0; oscillator < event.oscillators.size(); ++oscillator) {
             if (oscillator) out << ", ";
@@ -452,7 +457,22 @@ static void writeMidiImpl(const std::string& filename, const std::vector<NoteEve
         static_cast<uint8_t>(cfg.timeNumerator), static_cast<uint8_t>(denominatorPower), 24, 8});
     static const int majorSharps[] = {0,-5,2,-3,4,-1,6,1,-4,3,-2,5};
     static const int minorSharps[] = {-3,4,-1,6,1,-4,3,-2,5,0,-5,2};
-    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[cfg.keyRoot];
+    int relativeMajorOffset = 0;
+    switch (cfg.scale) {
+        case ScaleType::NaturalMinor:
+        case ScaleType::HarmonicMinor:
+        case ScaleType::MelodicMinor:
+        case ScaleType::MinorPentatonic:
+        case ScaleType::Blues: relativeMajorOffset = 3; break;
+        case ScaleType::Dorian: relativeMajorOffset = 10; break;
+        case ScaleType::Phrygian: relativeMajorOffset = 8; break;
+        case ScaleType::Lydian: relativeMajorOffset = 7; break;
+        case ScaleType::Mixolydian: relativeMajorOffset = 5; break;
+        case ScaleType::Locrian: relativeMajorOffset = 1; break;
+        default: break;
+    }
+    const int signatureRoot = (cfg.keyRoot + relativeMajorOffset) % 12;
+    int sharps = cfg.keyMinor ? minorSharps[cfg.keyRoot] : majorSharps[signatureRoot];
     track.insert(track.end(), {0x00, 0xFF, 0x59, 0x02,
         static_cast<uint8_t>(static_cast<int8_t>(sharps)), static_cast<uint8_t>(cfg.keyMinor ? 1 : 0)});
 

@@ -42,4 +42,10 @@ if(BUILD_TESTING)
             "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/synth_engine.lyra"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_synth_engine.cmake")
+    add_test(NAME lyra_generative_music_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/generative_music.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_generative_music.cmake")
 endif()

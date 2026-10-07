@@ -195,6 +195,37 @@ track pad {
 
 Исполняемый пример: `examples/lyra3/synth_engine.lyra`.
 
+## Scales, chord inversions, arpeggiator и генеративность
+
+```lyra
+seed 4242
+key D dorian
+scale_lock on
+
+track generative {
+  chance 65
+  humanize 0.015 8
+  randomize pitch=0.8 velocity=6 pan=30
+  arp Dm7 4 2 0.25 updown inversion=1
+  harmony Dm9 3 1.5 inversion 2
+}
+```
+
+Доступны `major`, `minor`, `harmonic_minor`, `melodic_minor`, `dorian`,
+`phrygian`, `lydian`, `mixolydian`, `locrian`, `major_pentatonic`,
+`minor_pentatonic`, `blues` и `chromatic`. `degree` использует выбранную
+гамму, а `scale_lock on` притягивает созданные высоты к ней.
+
+Chord symbols дополнительно поддерживают `6`, `m6`, `9`, `maj9`, `m9`,
+`add9`, `11` и `13`. `arp` принимает направления `up`, `down`, `updown`.
+
+`chance` задаёт вероятность события, `humanize` — максимальное отклонение
+времени в beats и velocity в процентах, `randomize` — диапазоны pitch,
+velocity и pan. PRNG полностью воспроизводим: одинаковый `seed` создаёт
+побитово одинаковый WAV. Это проверяется отдельным интеграционным тестом.
+
+Исполняемый пример: `examples/lyra3/generative_music.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

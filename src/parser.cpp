@@ -29,6 +29,10 @@ void Parser::parse(const std::string& source) {
     double trackUnisonDetune = 0.0;
     double trackFmRatio = 0.0, trackFmAmount = 0.0;
     double trackAmRate = 0.0, trackAmDepth = 0.0;
+    double trackChance = 100.0;
+    double trackHumanizeTiming = 0.0, trackHumanizeVelocity = 0.0;
+    double trackRandomPitch = 0.0, trackRandomVelocity = 0.0, trackRandomPan = 0.0;
+    uint32_t randomState = config.randomSeed;
     double linearTime = 0.0;
     int activeTrack = -1;
     int activeBus = -1;
@@ -54,6 +58,13 @@ void Parser::parse(const std::string& source) {
     };
     std::vector<LoopFrame> loopStack;
 
+    auto randomUnit = [&]() {
+        randomState ^= randomState << 13;
+        randomState ^= randomState >> 17;
+        randomState ^= randomState << 5;
+        return static_cast<double>(randomState) / 4294967295.0;
+    };
+
     auto addEvent = [&](NoteEvent ev) {
         if (inTrack) {
             ev.decay = trackDecay;
@@ -65,6 +76,28 @@ void Parser::parse(const std::string& source) {
             ev.fmAmount = trackFmAmount;
             ev.amRate = trackAmRate;
             ev.amDepth = trackAmDepth;
+            ev.probability = trackChance / 100.0;
+            if (randomUnit() * 100.0 >= trackChance) {
+                ev.triggered = false;
+                ev.volume = 0.0;
+            }
+            const double timingJitter = (randomUnit() * 2.0 - 1.0) * trackHumanizeTiming;
+            ev.startBeat = std::max(0.0, ev.startBeat + timingJitter);
+            const double velocityJitter = (randomUnit() * 2.0 - 1.0)
+                * (trackHumanizeVelocity + trackRandomVelocity) / 100.0;
+            ev.volume = std::max(0.0, ev.volume * (1.0 + velocityJitter));
+            ev.pan = std::clamp(ev.pan + (randomUnit() * 2.0 - 1.0) * trackRandomPan / 100.0, -1.0, 1.0);
+            const double pitchShift = (randomUnit() * 2.0 - 1.0) * trackRandomPitch;
+            for (double& frequency : ev.freqs) {
+                if (pitchShift != 0.0) frequency *= std::pow(2.0, pitchShift / 12.0);
+            }
+        }
+        if (config.scaleLock) {
+            for (double& frequency : ev.freqs) {
+                if (frequency <= 0.0) continue;
+                const int midi = static_cast<int>(std::lround(69.0 + 12.0 * std::log2(frequency / 440.0)));
+                frequency = midiToFreq(lockMidiToScale(midi, config.keyRoot, config.scale));
+            }
         }
         ev.trackId = activeTrack >= 0
             ? project.tracks[static_cast<size_t>(activeTrack)].id
@@ -83,6 +116,23 @@ void Parser::parse(const std::string& source) {
         if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
             value = value.substr(1, value.size() - 2);
         return value;
+    };
+
+    auto invertChord = [](std::vector<double> frequencies, int inversion) {
+        if (frequencies.empty()) return frequencies;
+        while (inversion > 0) {
+            const double first = frequencies.front() * 2.0;
+            frequencies.erase(frequencies.begin());
+            frequencies.push_back(first);
+            --inversion;
+        }
+        while (inversion < 0) {
+            const double last = frequencies.back() * 0.5;
+            frequencies.pop_back();
+            frequencies.insert(frequencies.begin(), last);
+            ++inversion;
+        }
+        return frequencies;
     };
 
     while (std::getline(iss, line)) {
@@ -137,12 +187,26 @@ void Parser::parse(const std::string& source) {
             }
             else if (cmd == "key") {
                 std::string root, mode = "major";
-                if (!(ls >> root)) throw std::runtime_error("usage: key <root> [major|minor]");
+                if (!(ls >> root)) throw std::runtime_error("usage: key <root> [scale]");
                 ls >> mode;
-                mode = toLower(mode);
-                if (mode != "major" && mode != "minor") throw std::runtime_error("key mode must be major or minor");
                 config.keyRoot = pitchClass(root);
-                config.keyMinor = mode == "minor";
+                config.scale = parseScaleType(mode);
+                config.keyMinor = config.scale == ScaleType::NaturalMinor ||
+                    config.scale == ScaleType::HarmonicMinor || config.scale == ScaleType::MelodicMinor;
+            }
+            else if (cmd == "scale_lock") {
+                std::string value;
+                if (!(ls >> value)) throw std::runtime_error("scale_lock expects on/off");
+                value = toLower(value);
+                if (value != "on" && value != "off" && value != "true" && value != "false")
+                    throw std::runtime_error("scale_lock expects on/off");
+                config.scaleLock = value == "on" || value == "true";
+            }
+            else if (cmd == "seed") {
+                uint32_t seed;
+                if (!(ls >> seed)) throw std::runtime_error("seed expects an unsigned integer");
+                config.randomSeed = seed == 0 ? 1 : seed;
+                randomState = config.randomSeed;
             }
             else if (cmd == "sound" || cmd == "style" || cmd == "quality") {
                 std::string mode;
@@ -219,6 +283,32 @@ void Parser::parse(const std::string& source) {
                 if (!(ls >> v) || v < 0.0 || v > 100.0) throw std::runtime_error("volume must be 0-100");
                 if (inTrack) trackVol = v / 100.0;
                 else config.volume = v / 100.0;
+            }
+            else if (cmd == "chance") {
+                if (!inTrack) throw std::runtime_error("chance can only be used inside a track");
+                if (!(ls >> trackChance) || trackChance < 0.0 || trackChance > 100.0)
+                    throw std::runtime_error("chance must be 0-100");
+            }
+            else if (cmd == "humanize") {
+                if (!inTrack) throw std::runtime_error("humanize can only be used inside a track");
+                if (!(ls >> trackHumanizeTiming >> trackHumanizeVelocity) || trackHumanizeTiming < 0.0 ||
+                    trackHumanizeVelocity < 0.0 || trackHumanizeVelocity > 100.0)
+                    throw std::runtime_error("usage: humanize <timing-beats> <velocity-percent>");
+            }
+            else if (cmd == "randomize") {
+                if (!inTrack) throw std::runtime_error("randomize can only be used inside a track");
+                std::string option;
+                while (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos) throw std::runtime_error("randomize parameters use name=value");
+                    const std::string name = toLower(option.substr(0, equal));
+                    const double value = std::stod(option.substr(equal + 1));
+                    if (value < 0.0) throw std::runtime_error("randomize amounts must be >= 0");
+                    if (name == "pitch") trackRandomPitch = value;
+                    else if (name == "velocity") trackRandomVelocity = value;
+                    else if (name == "pan") trackRandomPan = value;
+                    else throw std::runtime_error("unknown randomize parameter: " + name);
+                }
             }
             else if (cmd == "attack" || cmd == "release" || cmd == "cutoff" || cmd == "drive") {
                 if (!inTrack) throw std::runtime_error(cmd + " can only be used inside a track or instrument object");
@@ -506,6 +596,9 @@ void Parser::parse(const std::string& source) {
                 trackUnisonVoices = 1; trackUnisonDetune = 0.0;
                 trackFmRatio = 0.0; trackFmAmount = 0.0;
                 trackAmRate = 0.0; trackAmDepth = 0.0;
+                trackChance = 100.0;
+                trackHumanizeTiming = 0.0; trackHumanizeVelocity = 0.0;
+                trackRandomPitch = 0.0; trackRandomVelocity = 0.0; trackRandomPan = 0.0;
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
                 inTrack = false;
@@ -573,12 +666,12 @@ void Parser::parse(const std::string& source) {
                 double beats;
                 if (!(ls >> degree >> octave >> beats) || degree == 0 || octave < 0 || octave > 8 || beats <= 0.0)
                     throw std::runtime_error("usage: degree <non-zero degree> <octave> <beats>");
-                static const int majorScale[] = {0,2,4,5,7,9,11};
-                static const int minorScale[] = {0,2,3,5,7,8,10};
+                const auto& intervals = scaleIntervals(config.scale);
                 int zeroBased = degree > 0 ? degree - 1 : degree;
-                int scaleIndex = ((zeroBased % 7) + 7) % 7;
-                int octaveShift = static_cast<int>(std::floor(zeroBased / 7.0));
-                int semitone = (config.keyMinor ? minorScale[scaleIndex] : majorScale[scaleIndex]);
+                const int count = static_cast<int>(intervals.size());
+                int scaleIndex = ((zeroBased % count) + count) % count;
+                int octaveShift = static_cast<int>(std::floor(zeroBased / static_cast<double>(count)));
+                int semitone = intervals[static_cast<size_t>(scaleIndex)];
                 int midi = (octave + 1 + octaveShift) * 12 + config.keyRoot + semitone;
                 NoteEvent ev;
                 ev.freqs = {440.0 * std::pow(2.0, (midi - 69) / 12.0)};
@@ -640,6 +733,13 @@ void Parser::parse(const std::string& source) {
                     throw std::runtime_error("usage: harmony <symbol> <octave> <beats>");
                 NoteEvent ev;
                 ev.freqs = chordSymbolToFreqs(symbol, octave);
+                std::string option;
+                if (ls >> option) {
+                    int inversion;
+                    if (toLower(option) != "inversion" || !(ls >> inversion))
+                        throw std::runtime_error("harmony option must be: inversion <integer>");
+                    ev.freqs = invertChord(ev.freqs, inversion);
+                }
                 ev.durationBeats = beats;
                 ev.volume = inTrack ? trackVol : config.volume;
                 ev.wave = inTrack ? trackWave : config.wave;
@@ -652,6 +752,45 @@ void Parser::parse(const std::string& source) {
                 ev.startBeat = inTrack ? trackTime : linearTime;
                 addEvent(ev);
                 if (inTrack) trackTime += beats; else linearTime += beats;
+            }
+            else if (cmd == "arp" || cmd == "arpeggio") {
+                std::string symbol, direction = "up";
+                int octave;
+                double totalBeats, stepBeats;
+                if (!(ls >> symbol >> octave >> totalBeats >> stepBeats) || octave < 0 || octave > 8 ||
+                    totalBeats <= 0.0 || stepBeats <= 0.0)
+                    throw std::runtime_error("usage: arp <symbol> <octave> <total-beats> <step-beats> [up|down|updown] [inversion=N]");
+                int inversion = 0;
+                std::string option;
+                while (ls >> option) {
+                    const std::string lower = toLower(option);
+                    if (lower == "up" || lower == "down" || lower == "updown") direction = lower;
+                    else if (lower.rfind("inversion=", 0) == 0) inversion = std::stoi(lower.substr(10));
+                    else throw std::runtime_error("unknown arp option: " + option);
+                }
+                auto frequencies = invertChord(chordSymbolToFreqs(symbol, octave), inversion);
+                std::vector<double> sequence = frequencies;
+                if (direction == "down") std::reverse(sequence.begin(), sequence.end());
+                else if (direction == "updown" && sequence.size() > 1)
+                    for (size_t index = sequence.size() - 1; index-- > 1;) sequence.push_back(frequencies[index]);
+                const int steps = static_cast<int>(std::ceil(totalBeats / stepBeats));
+                const double start = inTrack ? trackTime : linearTime;
+                for (int index = 0; index < steps; ++index) {
+                    NoteEvent ev;
+                    ev.freqs = {sequence[static_cast<size_t>(index) % sequence.size()]};
+                    ev.durationBeats = std::min(stepBeats, totalBeats - index * stepBeats);
+                    ev.volume = inTrack ? trackVol : config.volume;
+                    ev.wave = inTrack ? trackWave : config.wave;
+                    ev.instrument = inTrack ? trackInstrument : config.instrument;
+                    ev.pan = inTrack ? trackPan : 0.0;
+                    ev.attack = inTrack ? trackAttack : -1.0;
+                    ev.release = inTrack ? trackRelease : -1.0;
+                    ev.cutoff = inTrack ? trackCutoff : 0.0;
+                    ev.drive = inTrack ? trackDrive : 0.0;
+                    ev.startBeat = start + index * stepBeats;
+                    addEvent(ev);
+                }
+                if (inTrack) trackTime = start + totalBeats; else linearTime = start + totalBeats;
             }
             else if (cmd == "kick" || cmd == "snare" || cmd == "hihat" || cmd == "hat" ||
                      cmd == "openhat" || cmd == "open_hihat" || cmd == "tom" ||

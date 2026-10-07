@@ -7,7 +7,7 @@
 ## 1. Музыкальный язык и timeline
 
 - [x] Ноты: pitch/octave, длительность, velocity, transpose.
-- [~] Аккорды: символы и качества готовы; нужны inversions и arpeggio.
+- [x] Расширенные chord symbols, положительные/отрицательные inversions и arpeggio.
 - [~] Tempo map влияет на audio render и MIDI export; нужны плавные tempo curves.
 - [x] Размеры 2/4/8/16 в знаменателе.
 - [x] Grid: степени двойки 1/1…1/128 и triplets.
@@ -15,9 +15,9 @@
 - [x] Повторяемые patterns и loops.
 - [~] Pattern placements и `at <beat>` есть в Project IR; нужен clip-level playlist API.
 - [x] Именованные sections с началом и длиной в Project IR.
-- [x] Scale degrees и major/minor.
-- [ ] Остальные scales/modes, scale lock и chord generator.
-- [ ] Arpeggiator, probability, seeded random и humanize.
+- [x] Scale degrees: major/minor и 11 дополнительных scales/modes.
+- [x] Scale lock и chord generator через расширенные symbols.
+- [x] Arpeggiator, probability, seeded random и humanize/randomize.
 
 ## 2. Синтез
 

@@ -1,0 +1,55 @@
+if(NOT DEFINED LYRA_EXE OR NOT DEFINED SOURCE_FILE OR NOT DEFINED OUTPUT_DIR)
+    message(FATAL_ERROR "LYRA_EXE, SOURCE_FILE and OUTPUT_DIR are required")
+endif()
+set(JSON_FILE "${OUTPUT_DIR}/generative-verification.json")
+set(WAV_A "${OUTPUT_DIR}/generative-a.wav")
+set(WAV_B "${OUTPUT_DIR}/generative-b.wav")
+execute_process(COMMAND "${LYRA_EXE}" -f json "${SOURCE_FILE}" "${JSON_FILE}"
+    RESULT_VARIABLE RESULT OUTPUT_QUIET ERROR_VARIABLE ERROR_TEXT)
+if(NOT RESULT EQUAL 0)
+    message(FATAL_ERROR "Generative JSON failed: ${ERROR_TEXT}")
+endif()
+file(READ "${JSON_FILE}" JSON_TEXT)
+foreach(EXPECTED
+    "\"scale\": \"dorian\""
+    "\"scale_lock\": true"
+    "\"random_seed\": 4242"
+    "\"probability\": 0.65")
+    string(FIND "${JSON_TEXT}" "${EXPECTED}" POSITION)
+    if(POSITION EQUAL -1)
+        message(FATAL_ERROR "Generative JSON is missing: ${EXPECTED}")
+    endif()
+endforeach()
+string(REGEX MATCHALL "\"track\": \"generative\"" EVENTS "${JSON_TEXT}")
+list(LENGTH EVENTS EVENT_COUNT)
+if(NOT EVENT_COUNT EQUAL 10)
+    message(FATAL_ERROR "Expected 10 generated events, got ${EVENT_COUNT}")
+endif()
+
+execute_process(COMMAND "${LYRA_EXE}" "${SOURCE_FILE}" "${WAV_A}"
+    RESULT_VARIABLE RESULT OUTPUT_QUIET ERROR_VARIABLE ERROR_TEXT)
+execute_process(COMMAND "${LYRA_EXE}" "${SOURCE_FILE}" "${WAV_B}"
+    RESULT_VARIABLE RESULT_B OUTPUT_QUIET ERROR_VARIABLE ERROR_TEXT_B)
+if(NOT RESULT EQUAL 0 OR NOT RESULT_B EQUAL 0)
+    message(FATAL_ERROR "Deterministic renders failed: ${ERROR_TEXT} ${ERROR_TEXT_B}")
+endif()
+file(SHA256 "${WAV_A}" HASH_A)
+file(SHA256 "${WAV_B}" HASH_B)
+if(NOT HASH_A STREQUAL HASH_B)
+    message(FATAL_ERROR "Equal seeds produced different WAV files")
+endif()
+
+file(READ "${SOURCE_FILE}" SOURCE_TEXT)
+string(REPLACE "seed 4242" "seed 4243" OTHER_SOURCE "${SOURCE_TEXT}")
+set(OTHER_FILE "${OUTPUT_DIR}/generative-other-seed.lyra")
+set(OTHER_WAV "${OUTPUT_DIR}/generative-other-seed.wav")
+file(WRITE "${OTHER_FILE}" "${OTHER_SOURCE}")
+execute_process(COMMAND "${LYRA_EXE}" "${OTHER_FILE}" "${OTHER_WAV}"
+    RESULT_VARIABLE OTHER_RESULT OUTPUT_QUIET ERROR_VARIABLE OTHER_ERROR)
+if(NOT OTHER_RESULT EQUAL 0)
+    message(FATAL_ERROR "Alternate seed render failed: ${OTHER_ERROR}")
+endif()
+file(SHA256 "${OTHER_WAV}" OTHER_HASH)
+if(HASH_A STREQUAL OTHER_HASH)
+    message(FATAL_ERROR "Different seeds produced identical WAV files")
+endif()
