@@ -80,6 +80,13 @@ void Project::validate() const {
                 !std::isfinite(event.durationBeats) || event.durationBeats <= 0.0)
                 throw std::runtime_error("Invalid event timing on track: " + track.name);
         }
+        for (const auto& clip : track.clips) {
+            if (clip.path.empty() || clip.trackId != track.id || clip.startBeat < 0.0 ||
+                clip.lengthBeats <= 0.0 || clip.trimStartSeconds < 0.0 ||
+                clip.fadeInBeats < 0.0 || clip.fadeOutBeats < 0.0 || clip.gain < 0.0 ||
+                clip.stretch <= 0.0 || clip.crossfadeMs < 0.0)
+                throw std::runtime_error("Invalid audio clip on track: " + track.name);
+        }
     }
     std::set<std::string> busIds;
     for (const auto& bus : buses) {
@@ -172,6 +179,9 @@ double Project::durationBeats() const {
     for (const auto& track : tracks)
         for (const auto& event : track.events)
             duration = std::max(duration, event.startBeat + event.durationBeats);
+    for (const auto& track : tracks)
+        for (const auto& clip : track.clips)
+            duration = std::max(duration, clip.startBeat + clip.lengthBeats);
     return duration;
 }
 

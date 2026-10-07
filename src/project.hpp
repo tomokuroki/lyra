@@ -88,6 +88,24 @@ struct MixerChannel {
     bool solo = false;
 };
 
+struct AudioClip {
+    std::string path;
+    std::string trackId;
+    double startBeat = 0.0;
+    double lengthBeats = 0.0;
+    double trimStartSeconds = 0.0;
+    double trimEndSeconds = -1.0;
+    double fadeInBeats = 0.0;
+    double fadeOutBeats = 0.0;
+    double gain = 1.0;
+    double pitchSemitones = 0.0;
+    double stretch = 1.0;
+    bool reverse = false;
+    bool loop = false;
+    double crossfadeMs = 0.0;
+    int sourceLine = 0;
+};
+
 struct Track {
     std::string id;
     std::string name;
@@ -95,6 +113,7 @@ struct Track {
     std::vector<Effect> inserts;
     std::vector<Send> sends;
     std::vector<Sidechain> sidechains;
+    std::vector<AudioClip> clips;
     std::vector<NoteEvent> events;
 };
 

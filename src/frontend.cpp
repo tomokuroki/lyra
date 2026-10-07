@@ -665,6 +665,15 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             continue;
         }
 
+        if (std::regex_match(line, match,
+            std::regex(R"(^(clip|sample)\s+\"([^\"]+)\"(.*)$)", std::regex::icase))) {
+            std::filesystem::path asset(match[2].str());
+            if (asset.is_relative()) asset = baseDir / asset;
+            output.push_back(toLower(match[1].str()) + " \"" +
+                std::filesystem::absolute(asset).lexically_normal().string() + "\"" + match[3].str());
+            continue;
+        }
+
         output.push_back(applyTranspose(resolve(line), transpose));
     }
     return output;

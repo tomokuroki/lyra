@@ -341,6 +341,24 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
                     << ", \"threshold_db\": " << sidechain.thresholdDb
                     << ", \"ratio\": " << sidechain.ratio << "}";
             }
+            out << "], \"clips\": [";
+            for (size_t clipIndex = 0; clipIndex < project->tracks[i].clips.size(); ++clipIndex) {
+                if (clipIndex) out << ", ";
+                const auto& clip = project->tracks[i].clips[clipIndex];
+                out << "{\"path\": \"" << jsonEscape(clip.path)
+                    << "\", \"start_beat\": " << clip.startBeat
+                    << ", \"length_beats\": " << clip.lengthBeats
+                    << ", \"trim_start_seconds\": " << clip.trimStartSeconds
+                    << ", \"trim_end_seconds\": " << clip.trimEndSeconds
+                    << ", \"fade_in_beats\": " << clip.fadeInBeats
+                    << ", \"fade_out_beats\": " << clip.fadeOutBeats
+                    << ", \"gain\": " << clip.gain
+                    << ", \"pitch_semitones\": " << clip.pitchSemitones
+                    << ", \"stretch\": " << clip.stretch
+                    << ", \"reverse\": " << (clip.reverse ? "true" : "false")
+                    << ", \"loop\": " << (clip.loop ? "true" : "false")
+                    << ", \"crossfade_ms\": " << clip.crossfadeMs << "}";
+            }
             out << "]}";
         }
         out << "]},\n";

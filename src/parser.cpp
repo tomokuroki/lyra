@@ -129,6 +129,12 @@ void Parser::parse(const std::string& source) {
             value = value.substr(1, value.size() - 2);
         return value;
     };
+    auto readQuotedToken = [](std::istringstream& stream) {
+        stream >> std::ws;
+        if (stream.peek() != '"') { std::string value; stream >> value; return value; }
+        stream.get();
+        std::string value; std::getline(stream, value, '"'); return value;
+    };
 
     auto invertChord = [](std::vector<double> frequencies, int inversion) {
         if (frequencies.empty()) return frequencies;
@@ -664,6 +670,49 @@ void Parser::parse(const std::string& source) {
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
                 inTrack = false;
                 activeTrack = -1;
+            }
+            else if (cmd == "clip" || cmd == "sample") {
+                if (!inTrack || activeTrack < 0) throw std::runtime_error(cmd + " can only be used inside a track");
+                AudioClip clip;
+                clip.path = readQuotedToken(ls);
+                clip.trackId = project.tracks[static_cast<size_t>(activeTrack)].id;
+                clip.sourceLine = lineNum;
+                if (clip.path.empty()) throw std::runtime_error(cmd + " requires an audio path");
+                if (cmd == "clip") {
+                    std::string at;
+                    if (!(ls >> at >> clip.startBeat) || toLower(at) != "at" || clip.startBeat < 0.0)
+                        throw std::runtime_error("usage: clip <path> at <beat> length=<beats> [options]");
+                } else {
+                    clip.startBeat = trackTime;
+                    if (!(ls >> clip.lengthBeats) || clip.lengthBeats <= 0.0)
+                        throw std::runtime_error("usage: sample <path> <beats> [options]");
+                }
+                std::string option;
+                while (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos) throw std::runtime_error("clip options use name=value");
+                    const std::string name = toLower(option.substr(0, equal));
+                    const std::string text = option.substr(equal + 1);
+                    if (name == "reverse" || name == "loop") {
+                        const bool enabled = toLower(text) == "true" || text == "1" || toLower(text) == "on";
+                        if (name == "reverse") clip.reverse = enabled; else clip.loop = enabled;
+                        continue;
+                    }
+                    const double value = std::stod(text);
+                    if (name == "length") clip.lengthBeats = value;
+                    else if (name == "trim_start") clip.trimStartSeconds = value;
+                    else if (name == "trim_end") clip.trimEndSeconds = value;
+                    else if (name == "fadein") clip.fadeInBeats = value;
+                    else if (name == "fadeout") clip.fadeOutBeats = value;
+                    else if (name == "gain") clip.gain = std::pow(10.0, value / 20.0);
+                    else if (name == "pitch") clip.pitchSemitones = value;
+                    else if (name == "stretch") clip.stretch = value;
+                    else if (name == "crossfade") clip.crossfadeMs = value;
+                    else throw std::runtime_error("unknown clip option: " + name);
+                }
+                if (clip.lengthBeats <= 0.0) throw std::runtime_error("clip length must be > 0 beats");
+                project.tracks[static_cast<size_t>(activeTrack)].clips.push_back(clip);
+                if (cmd == "sample") trackTime += clip.lengthBeats;
             }
             else if (cmd == "note") {
                 std::string name;

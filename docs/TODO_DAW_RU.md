@@ -34,11 +34,11 @@
 
 ## 3. Sampler и audio clips
 
-- [ ] WAV/AIFF/FLAC sampler и asset resolver.
-- [ ] One-shot, loop samples и sample layers.
-- [ ] Sample slicing и crossfade loops.
-- [ ] Reverse, resampling, pitch shift и time stretch.
-- [ ] Audio clips на timeline: trim, fades и clip gain.
+- [x] Native WAV/AIFF sampler, relative asset resolver; FLAC/MP3/OGG через FFmpeg.
+- [x] One-shot, loop samples и sample layers через перекрывающиеся clips.
+- [x] Sample slicing через trim и crossfade loops.
+- [~] Reverse/resampling/pitch/time stretch готовы базово; нужен phase-vocoder quality mode.
+- [x] Audio clips на timeline: trim, fades и clip gain.
 - [ ] Запись, count-in и realtime monitoring.
 
 ## 4. Эффекты и mastering
@@ -88,13 +88,9 @@
 - [ ] Lyra plugin SDK.
 - [ ] VST3/CLAP hosting и plugin automation.
 
-## 8. GUI (после стабильного engine API)
+## 8. Интерфейс
 
-- [ ] Piano roll.
-- [ ] Playlist/timeline.
-- [ ] Mixer.
-- [ ] Automation editor.
-- [ ] Waveform/sample editor.
+GUI не планируется: Lyra — язык программирования для создания музыки. Основной интерфейс — исходные `.lyra`-файлы, CLI и интеграции с редакторами кода.
 
 ## Порядок реализации
 

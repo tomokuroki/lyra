@@ -51,6 +51,7 @@ automation order and mixer values are rejected before rendering.
 | `common.hpp`    | Types, note→frequency, string helpers     | New enums, shared utilities          |
 | `project.*`     | Song IR, validation and render lowering   | Tracks, arrangement, automation      |
 | `dsp.*`         | Ordered effect processing primitives      | New effects and DSP algorithms       |
+| `audio_file.*`  | WAV/AIFF and optional FFmpeg asset decode  | Samplers and audio clip formats      |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
 | `export.*`      | PCM / events → audio and data files       | New codecs and event formats         |

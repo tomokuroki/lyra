@@ -251,6 +251,28 @@ track texture {
 Удаление modulation routes из тестового проекта даёт другой PCM-хеш, поэтому
 маршруты проверяются как звуковая обработка, а не только как синтаксис.
 
+## Sampler и audio clips
+
+```lyra
+track clips {
+  clip "samples/loop.wav" at 0 length=8 trim_start=0.2 trim_end=4.1 fadein=0.1 fadeout=0.2 gain=-6 pitch=3 stretch=1.2 loop=true crossfade=15
+
+  sample "samples/hit.aiff" 1 reverse=true gain=-9
+}
+```
+
+`clip` размещает asset по абсолютному beat, `sample` — в текущем курсоре и
+двигает его на указанную длину. Относительные пути разрешаются относительно
+файла, где команда написана, включая импортированные модули.
+
+Нативно читаются PCM WAV (8/16/24/32 и float32) и AIFF (8/16/24). FLAC, MP3 и
+OGG декодируются через FFmpeg. Поддержаны trim в секундах, fades в beats,
+clip gain в dB, reverse, looping, crossfade, pitch и stretch. Несколько clips
+на одной позиции образуют sample layers. Текущий pitch/stretch использует
+детерминированный resampling; phase-vocoder quality mode ещё находится в TODO.
+
+Исполняемый пример: `examples/lyra3/audio_clips.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

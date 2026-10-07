@@ -1,5 +1,6 @@
 #include "synth.hpp"
 #include "dsp.hpp"
+#include "audio_file.hpp"
 #include <cmath>
 
 namespace lyra {
@@ -535,10 +536,62 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
     return generateSamplesImpl(events, cfg, nullptr);
 }
 
+static void renderAudioClip(AudioBuffer& target, const AudioClip& clip, const Project& project,
+                            const MixerChannel& mixer) {
+    const SourceAudio source = loadAudioFile(clip.path);
+    if (source.samples.empty() || source.channels <= 0 || source.sampleRate <= 0) return;
+    const size_t sourceFrames = source.samples.size() / static_cast<size_t>(source.channels);
+    const size_t trimStart = std::min(sourceFrames, static_cast<size_t>(clip.trimStartSeconds * source.sampleRate));
+    const size_t trimEnd = clip.trimEndSeconds < 0.0 ? sourceFrames
+        : std::min(sourceFrames, static_cast<size_t>(clip.trimEndSeconds * source.sampleRate));
+    if (trimEnd <= trimStart) return;
+    const size_t trimmedFrames = trimEnd - trimStart;
+    const size_t startFrame = static_cast<size_t>(project.beatToSeconds(clip.startBeat) * project.config.sampleRate + 0.5);
+    const size_t outputFrames = static_cast<size_t>(project.durationSeconds(clip.startBeat, clip.lengthBeats)
+                                                    * project.config.sampleRate + 0.5);
+    const double pitchFactor = std::pow(2.0, clip.pitchSemitones / 12.0);
+    const double step = trimmedFrames / static_cast<double>(std::max<size_t>(1, outputFrames))
+                      * pitchFactor / clip.stretch;
+    const size_t crossfadeFrames = static_cast<size_t>(clip.crossfadeMs * source.sampleRate / 1000.0);
+    const size_t fadeInFrames = static_cast<size_t>(project.durationSeconds(clip.startBeat, clip.fadeInBeats)
+                                                    * project.config.sampleRate + 0.5);
+    const size_t fadeOutFrames = static_cast<size_t>(project.durationSeconds(
+        clip.startBeat + std::max(0.0, clip.lengthBeats - clip.fadeOutBeats), clip.fadeOutBeats)
+        * project.config.sampleRate + 0.5);
+    const double panAngle = (std::clamp(mixer.pan, -1.0, 1.0) + 1.0) * PI * 0.25;
+    for (size_t output = 0; output < outputFrames && startFrame + output < target.samples.size() / target.channels; ++output) {
+        double position = output * step;
+        if (clip.loop) position = std::fmod(position, static_cast<double>(trimmedFrames));
+        else if (position >= trimmedFrames) break;
+        if (clip.reverse) position = (trimmedFrames - 1) - position;
+        const size_t leftIndex = static_cast<size_t>(std::floor(position));
+        const size_t rightIndex = std::min(trimmedFrames - 1, leftIndex + 1);
+        const double fraction = position - leftIndex;
+        double gain = clip.gain * mixer.gain;
+        if (fadeInFrames > 0 && output < fadeInFrames) gain *= output / static_cast<double>(fadeInFrames);
+        if (fadeOutFrames > 0 && output + fadeOutFrames > outputFrames)
+            gain *= (outputFrames - output) / static_cast<double>(fadeOutFrames);
+        for (int channel = 0; channel < target.channels; ++channel) {
+            const int sourceChannel = source.channels == 1 ? 0 : std::min(channel, source.channels - 1);
+            double value = source.samples[(trimStart + leftIndex) * source.channels + sourceChannel] * (1.0 - fraction)
+                         + source.samples[(trimStart + rightIndex) * source.channels + sourceChannel] * fraction;
+            if (clip.loop && crossfadeFrames > 0 && !clip.reverse && leftIndex + crossfadeFrames >= trimmedFrames) {
+                const double blend = (leftIndex + crossfadeFrames - trimmedFrames) / static_cast<double>(crossfadeFrames);
+                const size_t wrap = (leftIndex + crossfadeFrames - trimmedFrames) % trimmedFrames;
+                const double wrapped = source.samples[(trimStart + wrap) * source.channels + sourceChannel];
+                value = value * (1.0 - blend) + wrapped * blend;
+            }
+            const double channelGain = target.channels == 2
+                ? gain * (channel == 0 ? std::cos(panAngle) : std::sin(panAngle)) : gain;
+            target.samples[(startFrame + output) * target.channels + channel] += static_cast<float>(value * channelGain);
+        }
+    }
+}
+
 AudioBuffer generateSamples(const Project& project) {
     const bool hasGraph = !project.buses.empty() || !project.master.inserts.empty() ||
         std::any_of(project.tracks.begin(), project.tracks.end(), [](const Track& track) {
-            return !track.inserts.empty() || !track.sends.empty() || !track.sidechains.empty();
+            return !track.inserts.empty() || !track.sends.empty() || !track.sidechains.empty() || !track.clips.empty();
         });
     if (!hasGraph) return generateSamplesImpl(project.renderEvents(), project.config, &project);
 
@@ -560,11 +613,17 @@ AudioBuffer generateSamples(const Project& project) {
 
     for (size_t trackIndex = 0; trackIndex < project.tracks.size(); ++trackIndex) {
         const auto& track = project.tracks[trackIndex];
+        const bool hasSolo = std::any_of(project.tracks.begin(), project.tracks.end(),
+            [](const Track& candidate) { return candidate.mixer.solo; });
+        if (track.mixer.mute || (hasSolo && !track.mixer.solo)) continue;
         std::vector<NoteEvent> trackEvents;
         for (const auto& event : flattened)
             if (event.trackId == track.id) trackEvents.push_back(event);
-        if (trackEvents.empty()) continue;
-        trackAudio[trackIndex] = generateSamplesImpl(trackEvents, project.config, &project, true, frames);
+        if (!trackEvents.empty())
+            trackAudio[trackIndex] = generateSamplesImpl(trackEvents, project.config, &project, true, frames);
+        for (const auto& clip : track.clips)
+            renderAudioClip(trackAudio[trackIndex], clip, project, track.mixer);
+        if (trackEvents.empty() && track.clips.empty()) continue;
         processEffectChain(trackAudio[trackIndex], track.inserts, project.config.sampleRate);
     }
 
