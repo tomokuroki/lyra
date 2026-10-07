@@ -1,0 +1,28 @@
+if(NOT DEFINED LYRA_EXE OR NOT DEFINED SOURCE_FILE OR NOT DEFINED OUTPUT_DIR)
+    message(FATAL_ERROR "LYRA_EXE, SOURCE_FILE and OUTPUT_DIR are required")
+endif()
+
+set(WET_WAV "${OUTPUT_DIR}/effect-suite-wet.wav")
+execute_process(COMMAND "${LYRA_EXE}" "${SOURCE_FILE}" "${WET_WAV}"
+    RESULT_VARIABLE RESULT OUTPUT_QUIET ERROR_VARIABLE ERROR_TEXT)
+if(NOT RESULT EQUAL 0)
+    message(FATAL_ERROR "Effect suite render failed: ${ERROR_TEXT}")
+endif()
+
+file(SHA256 "${WET_WAV}" WET_HASH)
+file(READ "${SOURCE_FILE}" ORIGINAL_SOURCE)
+foreach(EFFECT "parametric_eq" "flanger" "phaser" "expander" "de_esser")
+    string(REGEX REPLACE "fx ${EFFECT}[^\r\n]*" "# ${EFFECT} removed" DRY_SOURCE_TEXT "${ORIGINAL_SOURCE}")
+    set(DRY_SOURCE "${OUTPUT_DIR}/effect-suite-without-${EFFECT}.lyra")
+    set(DRY_WAV "${OUTPUT_DIR}/effect-suite-without-${EFFECT}.wav")
+    file(WRITE "${DRY_SOURCE}" "${DRY_SOURCE_TEXT}")
+    execute_process(COMMAND "${LYRA_EXE}" "${DRY_SOURCE}" "${DRY_WAV}"
+        RESULT_VARIABLE RESULT OUTPUT_QUIET ERROR_VARIABLE ERROR_TEXT)
+    if(NOT RESULT EQUAL 0)
+        message(FATAL_ERROR "Render without ${EFFECT} failed: ${ERROR_TEXT}")
+    endif()
+    file(SHA256 "${DRY_WAV}" DRY_HASH)
+    if(WET_HASH STREQUAL DRY_HASH)
+        message(FATAL_ERROR "${EFFECT} did not change rendered PCM")
+    endif()
+endforeach()

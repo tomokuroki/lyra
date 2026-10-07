@@ -31,15 +31,20 @@ EffectType parseEffectType(const std::string& rawName) {
     std::replace(name.begin(), name.end(), '-', '_');
     if (name == "lowpass" || name == "lp") return EffectType::LowPass;
     if (name == "highpass" || name == "hp") return EffectType::HighPass;
+    if (name == "parametric_eq" || name == "peq" || name == "eq") return EffectType::ParametricEq;
     if (name == "distortion" || name == "drive") return EffectType::Distortion;
     if (name == "saturation" || name == "saturator") return EffectType::Saturation;
     if (name == "bitcrusher" || name == "crusher") return EffectType::Bitcrusher;
     if (name == "chorus") return EffectType::Chorus;
+    if (name == "flanger") return EffectType::Flanger;
+    if (name == "phaser") return EffectType::Phaser;
     if (name == "delay" || name == "echo") return EffectType::Delay;
     if (name == "reverb") return EffectType::Reverb;
     if (name == "compressor" || name == "comp") return EffectType::Compressor;
     if (name == "limiter") return EffectType::Limiter;
     if (name == "gate") return EffectType::Gate;
+    if (name == "expander") return EffectType::Expander;
+    if (name == "de_esser" || name == "deesser") return EffectType::DeEsser;
     if (name == "stereo_width" || name == "widener") return EffectType::StereoWidth;
     if (name == "auto_pan" || name == "autopan") return EffectType::AutoPan;
     throw std::runtime_error("Unknown effect: " + rawName);
@@ -49,15 +54,20 @@ std::string effectTypeToString(EffectType type) {
     switch (type) {
         case EffectType::LowPass: return "lowpass";
         case EffectType::HighPass: return "highpass";
+        case EffectType::ParametricEq: return "parametric_eq";
         case EffectType::Distortion: return "distortion";
         case EffectType::Saturation: return "saturation";
         case EffectType::Bitcrusher: return "bitcrusher";
         case EffectType::Chorus: return "chorus";
+        case EffectType::Flanger: return "flanger";
+        case EffectType::Phaser: return "phaser";
         case EffectType::Delay: return "delay";
         case EffectType::Reverb: return "reverb";
         case EffectType::Compressor: return "compressor";
         case EffectType::Limiter: return "limiter";
         case EffectType::Gate: return "gate";
+        case EffectType::Expander: return "expander";
+        case EffectType::DeEsser: return "de_esser";
         case EffectType::StereoWidth: return "stereo_width";
         case EffectType::AutoPan: return "auto_pan";
     }

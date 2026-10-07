@@ -11,8 +11,9 @@ namespace lyra {
 enum class AutomationCurve { Step, Linear };
 
 enum class EffectType {
-    LowPass, HighPass, Distortion, Saturation, Bitcrusher,
-    Chorus, Delay, Reverb, Compressor, Limiter, Gate,
+    LowPass, HighPass, ParametricEq, Distortion, Saturation, Bitcrusher,
+    Chorus, Flanger, Phaser, Delay, Reverb,
+    Compressor, Limiter, Gate, Expander, DeEsser,
     StereoWidth, AutoPan
 };
 

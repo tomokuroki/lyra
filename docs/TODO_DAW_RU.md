@@ -44,10 +44,10 @@
 ## 4. Эффекты и mastering
 
 - [x] LP/HP/BP/notch filters с resonance.
-- [ ] Parametric EQ.
+- [x] Parametric EQ с frequency/gain/Q.
 - [~] Reverb/delay готовы в базовом виде; нужны room/hall/plate и ping-pong.
-- [~] Chorus, saturation и bitcrusher готовы; нужны flanger и phaser.
-- [~] Compressor, limiter и gate готовы; нужны expander и de-esser.
+- [x] Chorus, flanger, phaser, saturation и bitcrusher.
+- [x] Compressor, limiter, gate, expander и de-esser.
 - [~] Stereo widener и auto-pan готовы; нужна pitch correction.
 - [ ] Oversampling для нелинейных эффектов.
 - [ ] Mastering chain и loudness targets.

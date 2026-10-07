@@ -153,10 +153,11 @@ track lead {
 
 Порядок строк `fx` является порядком обработки. Send снимается после insert-
 цепочки дорожки, обрабатывается цепочкой bus и смешивается с master. Поддержаны
-`lowpass`, `highpass`, `distortion`, `saturation`, `bitcrusher`, `chorus`,
-`delay`, `reverb`, `compressor`, `limiter`, `gate`, `stereo_width` и
-`auto_pan`. Общий параметр `wet` задаётся в процентах; остальные параметры
-передаются как `name=value`.
+`lowpass`, `highpass`, `parametric_eq`, `distortion`, `saturation`,
+`bitcrusher`, `chorus`, `flanger`, `phaser`, `delay`, `reverb`, `compressor`,
+`limiter`, `gate`, `expander`, `de_esser`, `stereo_width` и `auto_pan`. Общий
+параметр `wet` задаётся в процентах; остальные параметры передаются как
+`name=value`.
 
 Исполняемый пример: `examples/lyra3/dsp_graph.lyra`.
 
@@ -172,6 +173,27 @@ track bass {
 
 Envelope follower использует отдельные attack/release и действительно изменяет
 PCM; интеграционный тест сравнивает WAV с маршрутом и без него.
+
+Расширенный набор insert-эффектов использует тот же порядок обработки:
+
+```lyra
+track texture {
+  fx parametric_eq frequency=1800 gain=5 q=1.2 wet=100
+  fx flanger rate=0.24 delay=1.5 depth=2.8 feedback=0.42 wet=38
+  fx phaser rate=0.31 depth=0.72 stages=6 wet=32
+  fx expander threshold=-38 ratio=2 wet=100
+  fx de_esser frequency=6200 threshold=-28 ratio=5 wet=70
+  note C4 4
+}
+```
+
+Parametric EQ — peaking biquad, `gain` задаётся в dB. У flanger `delay` и
+`depth` измеряются в ms, `rate` — в Hz. Phaser принимает 2–12 all-pass stages.
+Expander ослабляет сигнал ниже threshold, de-esser динамически уменьшает
+высокочастотную составляющую выше threshold. Каждый эффект отдельно проверяется
+сравнением хеша полученного PCM.
+
+Исполняемый пример: `examples/lyra3/effect_suite.lyra`.
 
 ## Multi-oscillator synth, unison, FM/AM и ADSR
 

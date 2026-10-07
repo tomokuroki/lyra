@@ -63,4 +63,10 @@ if(BUILD_TESTING)
             "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/export_mastering.lyra"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_export_mastering.cmake")
+    add_test(NAME lyra_effect_suite_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/effect_suite.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_effect_suite.cmake")
 endif()

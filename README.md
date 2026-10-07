@@ -53,7 +53,8 @@ track drums {
 - 16 drum sounds and five kits: standard, rock, electronic, retro, orchestral
 - Nine sound modes: 4-bit, 8-bit, 16-bit, 32-bit, 64-bit, tracker/Amiga,
   FM synthesis, modern chiptune, and clean modern
-- Built-in room reverb and tempo-synced delay
+- Ordered DSP effects including parametric EQ, dynamics, modulation, reverb,
+  delay, saturation, stereo width, and auto-pan
 - Interpreter-style `run`, `check`, and `init` commands
 - Release WAV export up to 192 kHz: 8/16/24-bit PCM or 32-bit IEEE float
 - Track panning, fades, metadata, and streaming/CD/hi-res master presets

@@ -36,6 +36,32 @@ void processEffect(AudioBuffer& audio, const Effect& effect, int sampleRate) {
                     ? state[channel] : audio.samples[index] - state[channel]);
             }
         }
+    } else if (effect.type == EffectType::ParametricEq) {
+        const double frequency = std::clamp(parameter(effect, "frequency",
+            parameter(effect, "freq", 1000.0)), 20.0, sampleRate * 0.45);
+        const double gainDb = std::clamp(parameter(effect, "gain", 3.0), -24.0, 24.0);
+        const double q = std::clamp(parameter(effect, "q", 1.0), 0.1, 20.0);
+        const double a = std::pow(10.0, gainDb / 40.0);
+        const double omega = 2.0 * PI * frequency / sampleRate;
+        const double alpha = std::sin(omega) / (2.0 * q);
+        const double a0 = 1.0 + alpha / a;
+        const double b0 = (1.0 + alpha * a) / a0;
+        const double b1 = (-2.0 * std::cos(omega)) / a0;
+        const double b2 = (1.0 - alpha * a) / a0;
+        const double a1 = (-2.0 * std::cos(omega)) / a0;
+        const double a2 = (1.0 - alpha / a) / a0;
+        std::vector<double> x1(audio.channels), x2(audio.channels), y1(audio.channels), y2(audio.channels);
+        for (size_t frame = 0; frame < frames; ++frame) {
+            for (int channel = 0; channel < audio.channels; ++channel) {
+                const size_t index = frame * audio.channels + channel;
+                const double input = audio.samples[index];
+                const double output = b0 * input + b1 * x1[channel] + b2 * x2[channel]
+                                    - a1 * y1[channel] - a2 * y2[channel];
+                x2[channel] = x1[channel]; x1[channel] = input;
+                y2[channel] = y1[channel]; y1[channel] = output;
+                audio.samples[index] = static_cast<float>(output);
+            }
+        }
     } else if (effect.type == EffectType::Distortion || effect.type == EffectType::Saturation) {
         const double drive = std::max(1.0, parameter(effect, "drive", 3.0));
         for (float& sample : audio.samples) {
@@ -57,6 +83,43 @@ void processEffect(AudioBuffer& audio, const Effect& effect, int sampleRate) {
                     audio.samples[(frame + offset) * audio.channels + channel] = value;
             }
         }
+    } else if (effect.type == EffectType::Flanger) {
+        const double rate = std::clamp(parameter(effect, "rate", 0.25), 0.01, 20.0);
+        const double delayMs = std::clamp(parameter(effect, "delay", 2.0), 0.1, 15.0);
+        const double depthMs = std::clamp(parameter(effect, "depth", 2.0), 0.0, 15.0);
+        const double feedback = std::clamp(parameter(effect, "feedback", 0.45), -0.95, 0.95);
+        for (size_t frame = 0; frame < frames; ++frame) {
+            const double lfo = 0.5 + 0.5 * std::sin(2.0 * PI * rate * frame / sampleRate);
+            const size_t offset = std::max<size_t>(1, static_cast<size_t>((delayMs + depthMs * lfo) * sampleRate / 1000.0));
+            if (frame < offset) continue;
+            for (int channel = 0; channel < audio.channels; ++channel) {
+                const size_t index = frame * audio.channels + channel;
+                const size_t delayed = (frame - offset) * audio.channels + channel;
+                audio.samples[index] += static_cast<float>(audio.samples[delayed] * feedback);
+            }
+        }
+    } else if (effect.type == EffectType::Phaser) {
+        const double rate = std::clamp(parameter(effect, "rate", 0.35), 0.01, 20.0);
+        const double depth = std::clamp(parameter(effect, "depth", 0.7), 0.0, 1.0);
+        const int stages = static_cast<int>(std::clamp(parameter(effect, "stages", 4.0), 2.0, 12.0));
+        std::vector<std::vector<double>> previousInput(stages, std::vector<double>(audio.channels));
+        std::vector<std::vector<double>> previousOutput(stages, std::vector<double>(audio.channels));
+        for (size_t frame = 0; frame < frames; ++frame) {
+            const double sweep = 0.5 + 0.5 * std::sin(2.0 * PI * rate * frame / sampleRate);
+            const double coefficient = std::clamp(0.05 + depth * sweep * 0.85, 0.01, 0.95);
+            for (int channel = 0; channel < audio.channels; ++channel) {
+                const size_t index = frame * audio.channels + channel;
+                double value = audio.samples[index];
+                for (int stage = 0; stage < stages; ++stage) {
+                    const double output = -coefficient * value + previousInput[stage][channel]
+                                        + coefficient * previousOutput[stage][channel];
+                    previousInput[stage][channel] = value;
+                    previousOutput[stage][channel] = output;
+                    value = output;
+                }
+                audio.samples[index] = static_cast<float>(value);
+            }
+        }
     } else if (effect.type == EffectType::Delay || effect.type == EffectType::Reverb || effect.type == EffectType::Chorus) {
         const double milliseconds = effect.type == EffectType::Delay ? parameter(effect, "time", 250.0)
             : effect.type == EffectType::Chorus ? parameter(effect, "time", 18.0) : parameter(effect, "time", 83.0);
@@ -69,7 +132,8 @@ void processEffect(AudioBuffer& audio, const Effect& effect, int sampleRate) {
                 const size_t delayed = (frame - delayFrames) * audio.channels + channel;
                 audio.samples[index] += static_cast<float>(audio.samples[delayed] * feedback);
             }
-    } else if (effect.type == EffectType::Compressor || effect.type == EffectType::Limiter || effect.type == EffectType::Gate) {
+    } else if (effect.type == EffectType::Compressor || effect.type == EffectType::Limiter ||
+               effect.type == EffectType::Gate || effect.type == EffectType::Expander) {
         const double thresholdDb = parameter(effect, "threshold", effect.type == EffectType::Limiter ? -1.0 : -18.0);
         const double threshold = std::pow(10.0, thresholdDb / 20.0);
         const double ratio = effect.type == EffectType::Limiter ? 100.0 : std::max(1.0, parameter(effect, "ratio", 4.0));
@@ -77,9 +141,30 @@ void processEffect(AudioBuffer& audio, const Effect& effect, int sampleRate) {
             const double magnitude = std::fabs(sample);
             if (effect.type == EffectType::Gate) {
                 if (magnitude < threshold) sample = 0.0f;
-            } else if (magnitude > threshold) {
+            } else if (effect.type == EffectType::Expander && magnitude < threshold && magnitude > 1e-9) {
+                const double gain = std::pow(magnitude / threshold, ratio - 1.0);
+                sample = static_cast<float>(sample * gain);
+            } else if (effect.type != EffectType::Expander && magnitude > threshold) {
                 const double compressed = threshold + (magnitude - threshold) / ratio;
                 sample = static_cast<float>(std::copysign(compressed, sample));
+            }
+        }
+    } else if (effect.type == EffectType::DeEsser) {
+        const double frequency = std::clamp(parameter(effect, "frequency", 6500.0), 1000.0, sampleRate * 0.45);
+        const double threshold = std::pow(10.0, parameter(effect, "threshold", -24.0) / 20.0);
+        const double ratio = std::max(1.0, parameter(effect, "ratio", 6.0));
+        const double alpha = 1.0 - std::exp(-2.0 * PI * frequency / sampleRate);
+        std::vector<double> low(audio.channels, 0.0);
+        for (size_t frame = 0; frame < frames; ++frame) {
+            for (int channel = 0; channel < audio.channels; ++channel) {
+                const size_t index = frame * audio.channels + channel;
+                const double input = audio.samples[index];
+                low[channel] += alpha * (input - low[channel]);
+                const double high = input - low[channel];
+                const double magnitude = std::fabs(high);
+                const double reduced = magnitude > threshold
+                    ? threshold + (magnitude - threshold) / ratio : magnitude;
+                audio.samples[index] = static_cast<float>(low[channel] + std::copysign(reduced, high));
             }
         }
     } else if (effect.type == EffectType::StereoWidth && audio.channels == 2) {
