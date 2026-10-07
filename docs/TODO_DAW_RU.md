@@ -15,6 +15,8 @@
 - [x] Повторяемые patterns и loops.
 - [~] Pattern placements и `at <beat>` есть в Project IR; нужен clip-level playlist API.
 - [x] Именованные sections с началом и длиной в Project IR.
+- [x] Именованные markers для intro/drop/chorus и произвольных точек timeline.
+- [ ] Встроенный metronome и настраиваемый click sound.
 - [x] Scale degrees: major/minor и 11 дополнительных scales/modes.
 - [x] Scale lock и chord generator через расширенные symbols.
 - [x] Arpeggiator, probability, seeded random и humanize/randomize.
@@ -30,7 +32,9 @@
 - [ ] Karplus–Strong и physical modeling.
 - [x] White, pink, brown и blue noise generators.
 - [x] Полный ADSR: attack/decay/sustain/release.
-- [x] Pitch/filter envelopes и modulation matrix с sine/triangle/random LFO.
+- [~] Pitch/filter envelopes и modulation matrix с sine/triangle/random LFO;
+  filter envelope пока управляет cutoff, нужна отдельная resonance envelope.
+- [~] Procedural kick/snare и остальные drum voices готовы; нужны rain/wind/foley generators.
 
 ## 3. Sampler и audio clips
 
@@ -39,7 +43,8 @@
 - [x] Sample slicing через trim и crossfade loops.
 - [~] Reverse/resampling/pitch/time stretch готовы базово; нужен phase-vocoder quality mode.
 - [x] Audio clips на timeline: trim, fades и clip gain.
-- [ ] Запись, count-in и realtime monitoring.
+- [ ] Audio recording с микрофона/линейного входа.
+- [ ] Count-in перед записью и realtime input monitoring.
 
 ## 4. Эффекты и mastering
 
@@ -74,11 +79,12 @@
 - [x] Stem export всех mixer tracks с routing/master processing.
 - [x] 44.1/48/96/192 kHz и WAV 8/16/24-bit PCM или 32-bit IEEE float.
 - [~] `.lyra` source project; нужны manifest, assets и portable bundle.
-- [x] Presets, reusable modules и standard library.
+- [x] Presets, reusable modules, imports и standard library инструментов/эффектов.
 
 ## 7. Runtime, realtime и расширения
 
 - [x] Functions, variables, constants, lists, conditions, repeat/for/while.
+- [~] Функции и patterns работают как музыкальные macros; нужен отдельный hygienic macro API.
 - [~] Диагностика с файлами и строками; нужен typed AST/source map.
 - [ ] Undo/redo command model.
 - [ ] Live reload и dependency graph.
@@ -89,9 +95,17 @@
 - [ ] Lyra plugin SDK.
 - [ ] VST3/CLAP hosting и plugin automation.
 
-## 8. Интерфейс
+## 8. Интерфейс и внешние редакторы
 
-GUI не планируется: Lyra — язык программирования для создания музыки. Основной интерфейс — исходные `.lyra`-файлы, CLI и интеграции с редакторами кода.
+Lyra остаётся языком программирования: исходные `.lyra`-файлы и CLI — основной
+интерфейс. GUI не входит в ядро, но Project IR должен позволять внешним клиентам
+реализовать весь исходный список без изменения формата проекта.
+
+- [ ] Piano-roll editor поверх Project IR.
+- [ ] Playlist/timeline editor.
+- [ ] Mixer UI.
+- [ ] Automation curve editor.
+- [ ] Sample waveform editor.
 
 ## Порядок реализации
 
