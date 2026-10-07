@@ -129,6 +129,37 @@ track drums {
 как отдельное размещение в `arrangement`, не теряя при этом совместимый поток
 нот для существующего синтезатора.
 
+## DSP graph: inserts, buses, sends и master
+
+```lyra
+bus space {
+  gain -6
+  fx chorus time=16 feedback=0.2 wet=25
+  fx reverb time=79 feedback=0.55 wet=45
+}
+
+master {
+  fx compressor threshold=-14 ratio=3 wet=100
+  fx limiter threshold=-1 wet=100
+}
+
+track lead {
+  fx highpass cutoff=90 wet=100
+  fx saturation drive=2.5 wet=65
+  send space 28
+  note C4 1
+}
+```
+
+Порядок строк `fx` является порядком обработки. Send снимается после insert-
+цепочки дорожки, обрабатывается цепочкой bus и смешивается с master. Поддержаны
+`lowpass`, `highpass`, `distortion`, `saturation`, `bitcrusher`, `chorus`,
+`delay`, `reverb`, `compressor`, `limiter`, `gate`, `stereo_width` и
+`auto_pan`. Общий параметр `wet` задаётся в процентах; остальные параметры
+передаются как `name=value`.
+
+Исполняемый пример: `examples/lyra3/dsp_graph.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

@@ -99,6 +99,7 @@ lyra/
 ├── src/
 │   ├── common.hpp      # Shared types & utilities
 │   ├── project.hpp/cpp # Validated song intermediate representation
+│   ├── dsp.hpp/cpp     # Ordered insert/bus/master effects
 │   ├── parser.hpp/cpp  # Command stream → Project IR
 │   ├── synth.hpp/cpp   # Synthesis engine
 │   ├── export.hpp/cpp  # Audio, MIDI, and event-data back-end

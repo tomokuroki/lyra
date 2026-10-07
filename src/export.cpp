@@ -300,7 +300,38 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
                 << "\", \"start_beat\": " << placement.startBeat
                 << ", \"length_beats\": " << placement.lengthBeats << "}";
         }
-        out << "],\n";
+        out << "],\n  \"routing\": {\"buses\": [";
+        for (size_t i = 0; i < project->buses.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"id\": \"" << jsonEscape(project->buses[i].id) << "\", \"inserts\": [";
+            for (size_t fx = 0; fx < project->buses[i].inserts.size(); ++fx) {
+                if (fx) out << ", ";
+                out << "\"" << effectTypeToString(project->buses[i].inserts[fx].type) << "\"";
+            }
+            out << "]}";
+        }
+        out << "], \"master_inserts\": [";
+        for (size_t i = 0; i < project->master.inserts.size(); ++i) {
+            if (i) out << ", ";
+            out << "\"" << effectTypeToString(project->master.inserts[i].type) << "\"";
+        }
+        out << "], \"tracks\": [";
+        for (size_t i = 0; i < project->tracks.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"id\": \"" << jsonEscape(project->tracks[i].id) << "\", \"inserts\": [";
+            for (size_t fx = 0; fx < project->tracks[i].inserts.size(); ++fx) {
+                if (fx) out << ", ";
+                out << "\"" << effectTypeToString(project->tracks[i].inserts[fx].type) << "\"";
+            }
+            out << "], \"sends\": [";
+            for (size_t send = 0; send < project->tracks[i].sends.size(); ++send) {
+                if (send) out << ", ";
+                out << "{\"bus\": \"" << jsonEscape(project->tracks[i].sends[send].busId)
+                    << "\", \"amount\": " << project->tracks[i].sends[send].amount << "}";
+            }
+            out << "]}";
+        }
+        out << "]},\n";
     }
     out << "  \"events\": [\n";
     for (size_t i = 0; i < events.size(); ++i) {

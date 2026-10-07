@@ -1,4 +1,5 @@
 #include "synth.hpp"
+#include "dsp.hpp"
 #include <cmath>
 
 namespace lyra {
@@ -220,8 +221,9 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
 }
 
 static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, const Config& cfg,
-                                       const Project* project) {
-    if (events.empty()) return AudioBuffer{{}, cfg.channels};
+                                       const Project* project, bool raw = false,
+                                       size_t forcedFrames = 0) {
+    if (events.empty() && forcedFrames == 0) return AudioBuffer{{}, cfg.channels};
 
     double maxBeat = 0.0;
     for (const auto& e : events)
@@ -231,7 +233,8 @@ static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, con
     double effectTail = (cfg.reverb > 0.0 ? 1.4 : 0.0)
                       + (cfg.delayMix > 0.0 ? cfg.delayBeats * beatSec * 2.0 : 0.0);
     double totalSec = (project ? project->beatToSeconds(maxBeat) : maxBeat * beatSec) + effectTail;
-    size_t totalSamples = static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
+    size_t totalSamples = forcedFrames > 0 ? forcedFrames
+        : static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
     std::vector<double> mixL(totalSamples, 0.0);
     std::vector<double> mixR(totalSamples, 0.0);
 
@@ -278,6 +281,20 @@ static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, con
             mixL[startS + i] += value * std::cos(panAngle);
             mixR[startS + i] += value * std::sin(panAngle);
         }
+    }
+
+    if (raw) {
+        AudioBuffer out;
+        out.channels = cfg.channels;
+        out.samples.resize(totalSamples * static_cast<size_t>(out.channels));
+        for (size_t i = 0; i < totalSamples; ++i) {
+            if (out.channels == 1) out.samples[i] = static_cast<float>((mixL[i] + mixR[i]) * 0.5);
+            else {
+                out.samples[i * 2] = static_cast<float>(mixL[i]);
+                out.samples[i * 2 + 1] = static_cast<float>(mixR[i]);
+            }
+        }
+        return out;
     }
 
     auto processChannel = [&](std::vector<double>& mix) {
@@ -424,7 +441,64 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
 }
 
 AudioBuffer generateSamples(const Project& project) {
-    return generateSamplesImpl(project.renderEvents(), project.config, &project);
+    const bool hasGraph = !project.buses.empty() || !project.master.inserts.empty() ||
+        std::any_of(project.tracks.begin(), project.tracks.end(), [](const Track& track) {
+            return !track.inserts.empty() || !track.sends.empty();
+        });
+    if (!hasGraph) return generateSamplesImpl(project.renderEvents(), project.config, &project);
+
+    const auto flattened = project.renderEvents();
+    const size_t frames = static_cast<size_t>((project.beatToSeconds(project.durationBeats()) + 3.0)
+                                               * project.config.sampleRate + 0.5);
+    AudioBuffer master{std::vector<float>(frames * static_cast<size_t>(project.config.channels), 0.0f),
+                       project.config.channels};
+    std::vector<AudioBuffer> busAudio(project.buses.size(),
+        AudioBuffer{std::vector<float>(master.samples.size(), 0.0f), project.config.channels});
+
+    auto addScaled = [](AudioBuffer& target, const AudioBuffer& source, double gain) {
+        const size_t count = std::min(target.samples.size(), source.samples.size());
+        for (size_t i = 0; i < count; ++i)
+            target.samples[i] += static_cast<float>(source.samples[i] * gain);
+    };
+
+    for (const auto& track : project.tracks) {
+        std::vector<NoteEvent> trackEvents;
+        for (const auto& event : flattened)
+            if (event.trackId == track.id) trackEvents.push_back(event);
+        if (trackEvents.empty()) continue;
+        AudioBuffer audio = generateSamplesImpl(trackEvents, project.config, &project, true, frames);
+        processEffectChain(audio, track.inserts, project.config.sampleRate);
+        addScaled(master, audio, 1.0);
+        for (const auto& send : track.sends) {
+            auto bus = std::find_if(project.buses.begin(), project.buses.end(),
+                [&](const Bus& candidate) { return candidate.id == send.busId; });
+            if (bus != project.buses.end())
+                addScaled(busAudio[static_cast<size_t>(std::distance(project.buses.begin(), bus))], audio, send.amount);
+        }
+    }
+
+    for (size_t index = 0; index < project.buses.size(); ++index) {
+        processEffectChain(busAudio[index], project.buses[index].inserts, project.config.sampleRate);
+        addScaled(master, busAudio[index], project.buses[index].mixer.gain);
+    }
+    if (project.config.delayMix > 0.0) {
+        Effect delay{EffectType::Delay, {{"time", project.config.delayBeats * 60000.0 / project.config.tempo},
+                                         {"feedback", 0.38}}, project.config.delayMix};
+        processEffect(master, delay, project.config.sampleRate);
+    }
+    if (project.config.reverb > 0.0) {
+        Effect reverb{EffectType::Reverb, {}, project.config.reverb};
+        processEffect(master, reverb, project.config.sampleRate);
+    }
+    processEffectChain(master, project.master.inserts, project.config.sampleRate);
+
+    double peak = 0.0;
+    for (float sample : master.samples) peak = std::max(peak, std::fabs(static_cast<double>(sample)));
+    const double target = std::pow(10.0, project.config.masterPeakDb / 20.0);
+    const double gain = peak > 1e-12 ? target / peak : 1.0;
+    for (float& sample : master.samples)
+        sample = static_cast<float>(std::clamp(sample * gain, -1.0, 1.0));
+    return master;
 }
 
 } // namespace lyra

@@ -24,6 +24,9 @@ void Parser::parse(const std::string& source) {
     double trackVol = 0.7;
     double linearTime = 0.0;
     int activeTrack = -1;
+    int activeBus = -1;
+    bool inBus = false;
+    bool inMaster = false;
     struct PatternFrame {
         std::string name;
         std::string trackId;
@@ -145,7 +148,10 @@ void Parser::parse(const std::string& source) {
                 std::string preset;
                 if (!(ls >> preset)) throw std::runtime_error("master requires streaming, cd, or hires");
                 preset = toLower(preset);
-                if (preset == "streaming") {
+                if (preset == "{") {
+                    if (inTrack || inBus || inMaster) throw std::runtime_error("routing blocks cannot be nested");
+                    inMaster = true;
+                } else if (preset == "streaming") {
                     config.sampleRate = 48000; config.bits = 24; config.channels = 2; config.masterPeakDb = -1.0;
                 } else if (preset == "cd") {
                     config.sampleRate = 44100; config.bits = 16; config.channels = 2; config.masterPeakDb = -1.0;
@@ -251,12 +257,47 @@ void Parser::parse(const std::string& source) {
                 else project.tracks[static_cast<size_t>(activeTrack)].mixer.solo = enabled;
             }
             else if (cmd == "gain") {
-                if (!inTrack || activeTrack < 0)
-                    throw std::runtime_error("gain can only be used inside a track");
                 double db;
                 if (!(ls >> db) || !std::isfinite(db) || db < -96.0 || db > 24.0)
                     throw std::runtime_error("gain must be between -96 and 24 dB");
-                project.tracks[static_cast<size_t>(activeTrack)].mixer.gain = std::pow(10.0, db / 20.0);
+                if (inTrack && activeTrack >= 0)
+                    project.tracks[static_cast<size_t>(activeTrack)].mixer.gain = std::pow(10.0, db / 20.0);
+                else if (inBus && activeBus >= 0)
+                    project.buses[static_cast<size_t>(activeBus)].mixer.gain = std::pow(10.0, db / 20.0);
+                else throw std::runtime_error("gain can only be used inside a track or bus");
+            }
+            else if (cmd == "fx") {
+                std::string typeName;
+                if (!(ls >> typeName)) throw std::runtime_error("usage: fx <type> [parameter=value ...]");
+                Effect effect;
+                effect.type = parseEffectType(typeName);
+                std::string option;
+                while (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos || equal == 0 || equal + 1 >= option.size())
+                        throw std::runtime_error("effect parameters use name=value");
+                    const std::string name = toLower(option.substr(0, equal));
+                    const double value = std::stod(option.substr(equal + 1));
+                    if (!std::isfinite(value)) throw std::runtime_error("effect parameter must be finite");
+                    if (name == "wet") {
+                        if (value < 0.0 || value > 100.0) throw std::runtime_error("wet must be 0-100");
+                        effect.wet = value / 100.0;
+                    } else effect.parameters[name] = value;
+                }
+                if (inTrack && activeTrack >= 0)
+                    project.tracks[static_cast<size_t>(activeTrack)].inserts.push_back(effect);
+                else if (inBus && activeBus >= 0)
+                    project.buses[static_cast<size_t>(activeBus)].inserts.push_back(effect);
+                else if (inMaster) project.master.inserts.push_back(effect);
+                else throw std::runtime_error("fx can only be used inside track, bus, or master");
+            }
+            else if (cmd == "send") {
+                if (!inTrack || activeTrack < 0) throw std::runtime_error("send can only be used inside a track");
+                std::string bus;
+                double amount;
+                if (!(ls >> bus >> amount) || amount < 0.0 || amount > 100.0)
+                    throw std::runtime_error("usage: send <bus> <0-100>");
+                project.tracks[static_cast<size_t>(activeTrack)].sends.push_back(Send{bus, amount / 100.0});
             }
             else if (cmd == "automate") {
                 if (!inTrack || activeTrack < 0)
@@ -331,8 +372,19 @@ void Parser::parse(const std::string& source) {
                 project.sections.push_back(Section{name, startBeat, lengthBeats, lineNum});
                 project.markers.push_back(Marker{name, startBeat, lineNum});
             }
+            else if (cmd == "bus") {
+                if (inTrack || inBus || inMaster) throw std::runtime_error("routing blocks cannot be nested");
+                std::string name, brace;
+                if (!(ls >> name >> brace) || brace != "{") throw std::runtime_error("usage: bus <name> {");
+                auto duplicate = std::find_if(project.buses.begin(), project.buses.end(),
+                    [&](const Bus& bus) { return bus.id == name; });
+                if (duplicate != project.buses.end()) throw std::runtime_error("duplicate bus name: " + name);
+                project.buses.push_back(Bus{name, {}, {}});
+                activeBus = static_cast<int>(project.buses.size() - 1);
+                inBus = true;
+            }
             else if (cmd == "track") {
-                if (inTrack) throw std::runtime_error("tracks cannot be nested");
+                if (inTrack || inBus || inMaster) throw std::runtime_error("routing blocks cannot be nested");
                 std::string name;
                 if (!(ls >> name)) throw std::runtime_error("usage: track <name> {");
                 if (name == "{") throw std::runtime_error("track requires a name");
@@ -551,6 +603,8 @@ void Parser::parse(const std::string& source) {
             else if (cmd == "}") {
                 if (loopStack.empty()) {
                     if (inTrack) { inTrack = false; activeTrack = -1; continue; }
+                    if (inBus) { inBus = false; activeBus = -1; continue; }
+                    if (inMaster) { inMaster = false; continue; }
                     throw std::runtime_error("Unexpected '}'");
                 }
 
@@ -594,6 +648,8 @@ void Parser::parse(const std::string& source) {
         throw std::runtime_error("Unclosed pattern placement");
     if (inTrack)
         throw std::runtime_error("Unclosed track {");
+    if (inBus || inMaster)
+        throw std::runtime_error("Unclosed routing block {");
 
     for (const auto& event : events) {
         auto track = std::find_if(project.tracks.begin(), project.tracks.end(),

@@ -8,6 +8,7 @@ add_executable(lyra
     src/main.cpp
     src/parser.cpp
     src/project.cpp
+    src/dsp.cpp
     src/synth.cpp
     src/export.cpp
     src/frontend.cpp
@@ -29,4 +30,10 @@ if(BUILD_TESTING)
             "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/project_ir.lyra"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_timeline.cmake")
+    add_test(NAME lyra_dsp_graph_render
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/dsp_graph.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_dsp_graph.cmake")
 endif()

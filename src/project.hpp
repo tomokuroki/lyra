@@ -3,11 +3,29 @@
 #include "common.hpp"
 
 #include <string>
+#include <map>
 #include <vector>
 
 namespace lyra {
 
 enum class AutomationCurve { Step, Linear };
+
+enum class EffectType {
+    LowPass, HighPass, Distortion, Saturation, Bitcrusher,
+    Chorus, Delay, Reverb, Compressor, Limiter, Gate,
+    StereoWidth, AutoPan
+};
+
+struct Effect {
+    EffectType type = EffectType::LowPass;
+    std::map<std::string, double> parameters;
+    double wet = 1.0;
+};
+
+struct Send {
+    std::string busId;
+    double amount = 0.0;
+};
 
 struct AutomationPoint {
     double beat = 0.0;
@@ -65,7 +83,19 @@ struct Track {
     std::string id;
     std::string name;
     MixerChannel mixer;
+    std::vector<Effect> inserts;
+    std::vector<Send> sends;
     std::vector<NoteEvent> events;
+};
+
+struct Bus {
+    std::string id;
+    MixerChannel mixer;
+    std::vector<Effect> inserts;
+};
+
+struct MasterChannel {
+    std::vector<Effect> inserts;
 };
 
 // The durable intermediate representation of a Lyra song.  Language syntax
@@ -80,6 +110,8 @@ struct Project {
     std::vector<TempoPoint> tempoMap;
     std::vector<Section> sections;
     std::vector<PatternPlacement> arrangement;
+    std::vector<Bus> buses;
+    MasterChannel master;
     TimelineSettings timeline;
 
     void validate() const;
@@ -88,5 +120,8 @@ struct Project {
     double beatToSeconds(double beat) const;
     double durationSeconds(double startBeat, double durationBeats) const;
 };
+
+EffectType parseEffectType(const std::string& name);
+std::string effectTypeToString(EffectType type);
 
 } // namespace lyra

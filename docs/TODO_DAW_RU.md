@@ -43,12 +43,12 @@
 
 ## 4. Эффекты и mastering
 
-- [~] Low-pass cutoff и drive готовы; нужны LP/HP/BP/notch + resonance.
+- [~] LP/HP готовы; нужны BP/notch + resonance.
 - [ ] Parametric EQ.
 - [~] Reverb/delay готовы в базовом виде; нужны room/hall/plate и ping-pong.
-- [ ] Chorus, flanger, phaser, saturation и bitcrusher.
-- [ ] Compressor, limiter, gate, expander и de-esser.
-- [ ] Stereo widener, auto-pan и pitch correction.
+- [~] Chorus, saturation и bitcrusher готовы; нужны flanger и phaser.
+- [~] Compressor, limiter и gate готовы; нужны expander и de-esser.
+- [~] Stereo widener и auto-pan готовы; нужна pitch correction.
 - [ ] Oversampling для нелинейных эффектов.
 - [ ] Mastering chain и loudness targets.
 - [ ] Peak/LUFS/spectrum/oscilloscope/stereo meters.
@@ -56,10 +56,10 @@
 ## 5. Mixer и routing
 
 - [x] Именованные mixer channels, volume/gain, pan, mute/solo.
-- [ ] Ordered insert FX chains.
-- [ ] Buses и sends.
+- [x] Ordered insert FX chains на track/bus/master.
+- [x] Именованные buses и post-insert sends.
 - [ ] Sidechain и parallel processing.
-- [ ] Master channel как отдельный routing node.
+- [x] Master channel как отдельный routing node.
 - [~] Automation: volume/pan/cutoff/drive + linear/step.
 - [ ] Pitch/tempo/любые FX parameters + ease/Bezier.
 
