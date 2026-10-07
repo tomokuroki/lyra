@@ -5,6 +5,12 @@
 namespace lyra {
 
 static double sampleWave(WaveType wave, double phase, double t) {
+    auto noiseAt = [](int64_t index) {
+        uint32_t x = static_cast<uint32_t>(index) * 747796405u + 2891336453u;
+        x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+        x = (x >> 22u) ^ x;
+        return static_cast<int32_t>(x) / 2147483648.0;
+    };
     switch (wave) {
         case WaveType::Sine:     return std::sin(2.0 * PI * phase);
         case WaveType::Square:   return phase < 0.5 ? 1.0 : -1.0;
@@ -12,10 +18,35 @@ static double sampleWave(WaveType wave, double phase, double t) {
         case WaveType::Saw:      return 2.0 * phase - 1.0;
         case WaveType::Pulse:    return phase < 0.25 ? 1.0 : -1.0;
         case WaveType::Noise: {
-            uint32_t x = static_cast<uint32_t>(t * 44100.0 * 7.0 + phase * 1e6);
-            x ^= x << 13;
-            x ^= x >> 17;
-            x ^= x << 5;
+            return noiseAt(static_cast<int64_t>(t * 44100.0 * 7.0 + phase * 1e6));
+        }
+        case WaveType::PinkNoise: {
+            const int64_t index = static_cast<int64_t>(t * 44100.0);
+            return 0.52 * noiseAt(index) + 0.26 * noiseAt(index / 2)
+                 + 0.14 * noiseAt(index / 4) + 0.08 * noiseAt(index / 8);
+        }
+        case WaveType::BrownNoise: {
+            const double position = t * 180.0;
+            const int64_t index = static_cast<int64_t>(std::floor(position));
+            const double fraction = position - index;
+            return noiseAt(index) * (1.0 - fraction) + noiseAt(index + 1) * fraction;
+        }
+        case WaveType::BlueNoise: {
+            const int64_t index = static_cast<int64_t>(t * 44100.0);
+            return std::clamp((noiseAt(index) - noiseAt(index - 1)) * 0.7, -1.0, 1.0);
+        }
+    }
+    return 0.0;
+}
+
+static double lfoValue(const LfoRoute& route, double t) {
+    double phase = std::fmod(std::max(0.0, t * route.rateHz), 1.0);
+    switch (route.wave) {
+        case LfoWave::Sine: return std::sin(2.0 * PI * phase);
+        case LfoWave::Triangle: return 1.0 - 4.0 * std::fabs(phase - 0.5);
+        case LfoWave::Random: {
+            uint32_t x = static_cast<uint32_t>(std::floor(t * route.rateHz + 1.0)) * 747796405u + 2891336453u;
+            x ^= x >> 16; x *= 2246822519u; x ^= x >> 13;
             return static_cast<int32_t>(x) / 2147483648.0;
         }
     }
@@ -267,13 +298,27 @@ static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, con
         if (notes == 0) continue;
 
         double durSec = durationSec;
-        double filterState = 0.0;
-        double filterAlpha = ev.cutoff > 0.0
-            ? std::min(1.0, 1.0 - std::exp(-2.0 * PI * ev.cutoff / cfg.sampleRate)) : 1.0;
+        double filterLow = 0.0;
+        double filterBand = 0.0;
 
         for (size_t i = 0; i < nS && startS + i < totalSamples; ++i) {
             double t = static_cast<double>(i) / cfg.sampleRate;
             double env = instrumentEnvelope(ev, t, durSec);
+            const double progress = durSec > 0.0 ? std::clamp(t / durSec, 0.0, 1.0) : 0.0;
+            double pitchMod = ev.pitchEnvelopeStart
+                + (ev.pitchEnvelopeEnd - ev.pitchEnvelopeStart) * progress;
+            double cutoff = ev.cutoff;
+            if (ev.filterEnvelopeStart > 0.0 || ev.filterEnvelopeEnd > 0.0)
+                cutoff = ev.filterEnvelopeStart + (ev.filterEnvelopeEnd - ev.filterEnvelopeStart) * progress;
+            double pan = ev.pan;
+            double amplitudeMod = 1.0;
+            for (const auto& route : ev.lfoRoutes) {
+                const double value = lfoValue(route, t) * route.amount;
+                if (route.target == ModTarget::Pitch) pitchMod += value;
+                else if (route.target == ModTarget::Cutoff) cutoff += value;
+                else if (route.target == ModTarget::Pan) pan += value;
+                else if (route.target == ModTarget::Amp) amplitudeMod *= std::max(0.0, 1.0 + value);
+            }
 
             double sample = 0.0;
             const size_t oscillatorCount = ev.oscillators.empty() ? 1 : ev.oscillators.size();
@@ -297,7 +342,8 @@ static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, con
                     for (int unisonIndex = 0; unisonIndex < unison; ++unisonIndex) {
                         const double spread = unison == 1 ? 0.0
                             : (2.0 * unisonIndex / static_cast<double>(unison - 1) - 1.0) * ev.unisonDetuneCents;
-                        const double frequency = baseFrequency * std::pow(2.0, (offsetCents + spread) / 1200.0);
+                        const double frequency = baseFrequency * std::pow(2.0,
+                            (offsetCents + spread + pitchMod * 100.0) / 1200.0);
                         double phase = frequency * t;
                         if (ev.fmRatio > 0.0 && ev.fmAmount > 0.0)
                             phase += std::sin(2.0 * PI * frequency * ev.fmRatio * t) * ev.fmAmount / (2.0 * PI);
@@ -313,10 +359,20 @@ static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, con
                 double amount = 1.0 + ev.drive * 5.0;
                 sample = std::tanh(sample * amount) / std::tanh(amount);
             }
-            filterState += filterAlpha * (sample - filterState);
-            sample = filterState;
-            double panAngle = (ev.pan + 1.0) * PI * 0.25;
-            double value = sample * env * ev.volume;
+            if (cutoff > 0.0) {
+                const double coefficient = std::clamp(2.0 * std::sin(PI * std::min(cutoff, cfg.sampleRate * 0.45)
+                    / cfg.sampleRate), 0.0, 0.99);
+                const double damping = 1.5 - std::clamp(ev.resonance, 0.0, 1.0) * 1.4;
+                filterLow += coefficient * filterBand;
+                const double high = sample - filterLow - damping * filterBand;
+                filterBand += coefficient * high;
+                if (ev.filterType == FilterType::LowPass) sample = filterLow;
+                else if (ev.filterType == FilterType::HighPass) sample = high;
+                else if (ev.filterType == FilterType::BandPass) sample = filterBand;
+                else sample = filterLow + high;
+            }
+            double panAngle = (std::clamp(pan, -1.0, 1.0) + 1.0) * PI * 0.25;
+            double value = sample * env * ev.volume * amplitudeMod;
             mixL[startS + i] += value * std::cos(panAngle);
             mixR[startS + i] += value * std::sin(panAngle);
         }

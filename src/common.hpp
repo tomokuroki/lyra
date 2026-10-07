@@ -20,7 +20,21 @@ enum class WaveType {
     Triangle,
     Saw,
     Pulse,
-    Noise
+    Noise,
+    PinkNoise,
+    BrownNoise,
+    BlueNoise
+};
+
+enum class FilterType { LowPass, HighPass, BandPass, Notch };
+enum class LfoWave { Sine, Triangle, Random };
+enum class ModTarget { Pitch, Cutoff, Pan, Amp };
+
+struct LfoRoute {
+    LfoWave wave = LfoWave::Sine;
+    ModTarget target = ModTarget::Pitch;
+    double rateHz = 1.0;
+    double amount = 0.0;
 };
 
 enum class InstrumentType {
@@ -114,6 +128,13 @@ struct NoteEvent {
     double sustain = -1.0;
     double release = -1.0;
     double cutoff = 0.0;
+    FilterType filterType = FilterType::LowPass;
+    double resonance = 0.0;
+    double pitchEnvelopeStart = 0.0;
+    double pitchEnvelopeEnd = 0.0;
+    double filterEnvelopeStart = 0.0;
+    double filterEnvelopeEnd = 0.0;
+    std::vector<LfoRoute> lfoRoutes;
     double drive = 0.0;
     struct Oscillator {
         WaveType wave = WaveType::Sine;
@@ -226,6 +247,9 @@ inline WaveType parseWave(const std::string& s) {
     if (w == "saw" || w == "sawtooth") return WaveType::Saw;
     if (w == "pulse") return WaveType::Pulse;
     if (w == "noise") return WaveType::Noise;
+    if (w == "pink" || w == "pink_noise") return WaveType::PinkNoise;
+    if (w == "brown" || w == "brown_noise") return WaveType::BrownNoise;
+    if (w == "blue" || w == "blue_noise") return WaveType::BlueNoise;
     throw std::runtime_error("Unknown wave type: " + s);
 }
 
@@ -237,6 +261,9 @@ inline std::string waveToString(WaveType w) {
         case WaveType::Saw:      return "saw";
         case WaveType::Pulse:    return "pulse";
         case WaveType::Noise:    return "noise";
+        case WaveType::PinkNoise:return "pink_noise";
+        case WaveType::BrownNoise:return "brown_noise";
+        case WaveType::BlueNoise:return "blue_noise";
     }
     return "square";
 }

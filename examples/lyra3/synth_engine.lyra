@@ -13,3 +13,16 @@ track pad {
   chord C4 E4 G4 B4 2
   chord A3 C4 E4 G4 2
 }
+
+track modulated_texture {
+  osc pink_noise level=14
+  osc saw level=45
+  filter bp 1800 60
+  pitch_env 12 0
+  filter_env 350 5200
+  lfo sine 5 pitch 0.18
+  lfo triangle 0.4 cutoff 900
+  lfo random 2 pan 30
+  adsr 0.01 0.15 45 0.25
+  note C3 4
+}

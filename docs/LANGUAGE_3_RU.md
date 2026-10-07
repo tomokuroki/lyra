@@ -226,6 +226,31 @@ velocity и pan. PRNG полностью воспроизводим: одина�
 
 Исполняемый пример: `examples/lyra3/generative_music.lyra`.
 
+## Filters, envelopes и modulation matrix
+
+```lyra
+track texture {
+  osc pink_noise level=14
+  osc saw level=45
+  filter bp 1800 60
+  pitch_env 12 0
+  filter_env 350 5200
+  lfo sine 5 pitch 0.18
+  lfo triangle 0.4 cutoff 900
+  lfo random 2 pan 30
+  note C3 4
+}
+```
+
+`filter` поддерживает `lp`, `hp`, `bp`, `notch`, cutoff в Hz и resonance
+0–100. `pitch_env` задаётся в полутонах, `filter_env` — в Hz. Можно объявить
+несколько LFO и независимо направить их в `pitch`, `cutoff`, `pan` или `amp`.
+Доступны формы `sine`, `triangle`, `random`.
+
+Помимо `noise` осциллятор понимает `pink_noise`, `brown_noise` и `blue_noise`.
+Удаление modulation routes из тестового проекта даёт другой PCM-хеш, поэтому
+маршруты проверяются как звуковая обработка, а не только как синтаксис.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

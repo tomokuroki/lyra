@@ -22,6 +22,11 @@ void Parser::parse(const std::string& source) {
     double trackSustain = -1.0;
     double trackRelease = -1.0;
     double trackCutoff = 0.0;
+    FilterType trackFilterType = FilterType::LowPass;
+    double trackResonance = 0.0;
+    double trackPitchEnvStart = 0.0, trackPitchEnvEnd = 0.0;
+    double trackFilterEnvStart = 0.0, trackFilterEnvEnd = 0.0;
+    std::vector<LfoRoute> trackLfoRoutes;
     double trackDrive = 0.0;
     double trackVol = 0.7;
     std::vector<NoteEvent::Oscillator> trackOscillators;
@@ -76,6 +81,13 @@ void Parser::parse(const std::string& source) {
             ev.fmAmount = trackFmAmount;
             ev.amRate = trackAmRate;
             ev.amDepth = trackAmDepth;
+            ev.filterType = trackFilterType;
+            ev.resonance = trackResonance;
+            ev.pitchEnvelopeStart = trackPitchEnvStart;
+            ev.pitchEnvelopeEnd = trackPitchEnvEnd;
+            ev.filterEnvelopeStart = trackFilterEnvStart;
+            ev.filterEnvelopeEnd = trackFilterEnvEnd;
+            ev.lfoRoutes = trackLfoRoutes;
             ev.probability = trackChance / 100.0;
             if (randomUnit() * 100.0 >= trackChance) {
                 ev.triggered = false;
@@ -330,6 +342,51 @@ void Parser::parse(const std::string& source) {
                     throw std::runtime_error("usage: adsr <attack-sec> <decay-sec> <sustain-0-100> <release-sec>");
                 trackAttack = attack; trackDecay = decay;
                 trackSustain = sustain / 100.0; trackRelease = release;
+            }
+            else if (cmd == "filter") {
+                if (!inTrack) throw std::runtime_error("filter can only be used inside a track");
+                std::string type;
+                if (!(ls >> type >> trackCutoff))
+                    throw std::runtime_error("usage: filter <lp|hp|bp|notch> <cutoff-hz> [resonance-0-100]");
+                type = toLower(type);
+                if (type == "lp" || type == "lowpass") trackFilterType = FilterType::LowPass;
+                else if (type == "hp" || type == "highpass") trackFilterType = FilterType::HighPass;
+                else if (type == "bp" || type == "bandpass") trackFilterType = FilterType::BandPass;
+                else if (type == "notch") trackFilterType = FilterType::Notch;
+                else throw std::runtime_error("filter type must be lp, hp, bp, or notch");
+                double resonancePercent = 0.0;
+                if (ls >> resonancePercent) {
+                    if (resonancePercent < 0.0 || resonancePercent > 100.0)
+                        throw std::runtime_error("filter resonance must be 0-100");
+                    trackResonance = resonancePercent / 100.0;
+                }
+            }
+            else if (cmd == "pitch_env") {
+                if (!inTrack || !(ls >> trackPitchEnvStart >> trackPitchEnvEnd))
+                    throw std::runtime_error("usage: pitch_env <start-semitones> <end-semitones>");
+            }
+            else if (cmd == "filter_env") {
+                if (!inTrack || !(ls >> trackFilterEnvStart >> trackFilterEnvEnd) ||
+                    trackFilterEnvStart < 0.0 || trackFilterEnvEnd < 0.0)
+                    throw std::runtime_error("usage: filter_env <start-hz> <end-hz>");
+            }
+            else if (cmd == "lfo") {
+                if (!inTrack) throw std::runtime_error("lfo can only be used inside a track");
+                std::string wave, target;
+                LfoRoute route;
+                if (!(ls >> wave >> route.rateHz >> target >> route.amount) || route.rateHz < 0.0)
+                    throw std::runtime_error("usage: lfo <sine|triangle|random> <rate-hz> <pitch|cutoff|pan|amp> <amount>");
+                wave = toLower(wave); target = toLower(target);
+                if (wave == "sine") route.wave = LfoWave::Sine;
+                else if (wave == "triangle") route.wave = LfoWave::Triangle;
+                else if (wave == "random") route.wave = LfoWave::Random;
+                else throw std::runtime_error("lfo wave must be sine, triangle, or random");
+                if (target == "pitch") route.target = ModTarget::Pitch;
+                else if (target == "cutoff") route.target = ModTarget::Cutoff;
+                else if (target == "pan") { route.target = ModTarget::Pan; route.amount /= 100.0; }
+                else if (target == "amp" || target == "volume") { route.target = ModTarget::Amp; route.amount /= 100.0; }
+                else throw std::runtime_error("lfo target must be pitch, cutoff, pan, or amp");
+                trackLfoRoutes.push_back(route);
             }
             else if (cmd == "osc" || cmd == "oscillator") {
                 if (!inTrack) throw std::runtime_error("osc can only be used inside a track");
@@ -590,6 +647,10 @@ void Parser::parse(const std::string& source) {
                 trackSustain = -1.0;
                 trackRelease = -1.0;
                 trackCutoff = 0.0;
+                trackFilterType = FilterType::LowPass; trackResonance = 0.0;
+                trackPitchEnvStart = 0.0; trackPitchEnvEnd = 0.0;
+                trackFilterEnvStart = 0.0; trackFilterEnvEnd = 0.0;
+                trackLfoRoutes.clear();
                 trackDrive = 0.0;
                 trackVol = config.volume;
                 trackOscillators.clear();

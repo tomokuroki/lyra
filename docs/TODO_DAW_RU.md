@@ -28,9 +28,9 @@
 - [~] AM готова; нужны wavetable и additive synthesis.
 - [~] Subtractive chain: oscillator/filter/amp есть частично.
 - [ ] Karplus–Strong и physical modeling.
-- [~] White noise есть; нужны pink/brown/blue.
+- [x] White, pink, brown и blue noise generators.
 - [x] Полный ADSR: attack/decay/sustain/release.
-- [ ] Pitch/filter envelopes, LFO и modulation matrix.
+- [x] Pitch/filter envelopes и modulation matrix с sine/triangle/random LFO.
 
 ## 3. Sampler и audio clips
 
@@ -43,7 +43,7 @@
 
 ## 4. Эффекты и mastering
 
-- [~] LP/HP готовы; нужны BP/notch + resonance.
+- [x] LP/HP/BP/notch filters с resonance.
 - [ ] Parametric EQ.
 - [~] Reverb/delay готовы в базовом виде; нужны room/hall/plate и ping-pong.
 - [~] Chorus, saturation и bitcrusher готовы; нужны flanger и phaser.

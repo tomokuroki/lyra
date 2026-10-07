@@ -368,6 +368,11 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
             << ", \"sustain\": " << event.sustain
             << ", \"release\": " << event.release
             << ", \"cutoff\": " << event.cutoff
+            << ", \"filter_type\": " << static_cast<int>(event.filterType)
+            << ", \"resonance\": " << event.resonance
+            << ", \"pitch_envelope\": [" << event.pitchEnvelopeStart << ", " << event.pitchEnvelopeEnd << "]"
+            << ", \"filter_envelope\": [" << event.filterEnvelopeStart << ", " << event.filterEnvelopeEnd << "]"
+            << ", \"lfo_count\": " << event.lfoRoutes.size()
             << ", \"drive\": " << event.drive
             << ", \"unison\": " << event.unisonVoices
             << ", \"unison_detune_cents\": " << event.unisonDetuneCents
