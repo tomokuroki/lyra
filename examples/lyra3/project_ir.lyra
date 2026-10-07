@@ -1,6 +1,21 @@
 # Lyra 3 project IR: mixer state, markers and deterministic automation.
 tempo 120
+tempo 90 at 2
 time 4/4
+grid 1/8
+swing 60
+section intro at 0 length 4
+
+pattern motif() {
+  note C5 0.5
+  note E5 0.5
+  note G5 0.5
+  note B5 0.5
+}
+
+pattern sustain() {
+  note C6 2
+}
 
 track lead {
   instrument piano
@@ -11,9 +26,10 @@ track lead {
   automate volume at 4 100 linear
   automate cutoff at 0 1200 step
   automate cutoff at 4 6000 linear
-  note C5 1
-  note E5 1
-  note G5 2
+  at 0
+  play motif()
+  at 2
+  play sustain()
 }
 
 track guide {

@@ -57,6 +57,26 @@ void Project::validate() const {
             previous = point.beat;
         }
     }
+    double previousTempoBeat = -1.0;
+    for (const auto& point : tempoMap) {
+        if (!std::isfinite(point.beat) || point.beat < 0.0 ||
+            !std::isfinite(point.bpm) || point.bpm <= 0.0 ||
+            point.beat < previousTempoBeat)
+            throw std::runtime_error("Tempo points must be ordered and have BPM > 0");
+        previousTempoBeat = point.beat;
+    }
+    if (timeline.gridBeats < 0.0 || !std::isfinite(timeline.gridBeats) ||
+        timeline.swingPercent < 50.0 || timeline.swingPercent > 75.0)
+        throw std::runtime_error("Invalid grid or swing settings");
+    for (const auto& section : sections) {
+        if (section.name.empty() || section.startBeat < 0.0 || section.lengthBeats <= 0.0)
+            throw std::runtime_error("Invalid section: " + section.name);
+    }
+    for (const auto& placement : arrangement) {
+        if (!ids.count(placement.trackId) || placement.pattern.empty() ||
+            placement.startBeat < 0.0 || placement.lengthBeats < 0.0)
+            throw std::runtime_error("Invalid pattern placement: " + placement.pattern);
+    }
 }
 
 std::vector<NoteEvent> Project::renderEvents() const {
@@ -66,6 +86,13 @@ std::vector<NoteEvent> Project::renderEvents() const {
     for (const auto& track : tracks) {
         if (track.mixer.mute || (hasSolo && !track.mixer.solo)) continue;
         for (auto event : track.events) {
+            if (timeline.gridBeats > 0.0) {
+                const double cell = std::round(event.startBeat / timeline.gridBeats);
+                event.startBeat = cell * timeline.gridBeats;
+                const auto cellIndex = static_cast<long long>(std::llround(cell));
+                if ((cellIndex & 1LL) != 0)
+                    event.startBeat += timeline.gridBeats * (timeline.swingPercent / 100.0 - 0.5);
+            }
             event.volume *= track.mixer.gain;
             event.pan = std::clamp(event.pan + track.mixer.pan, -1.0, 1.0);
             for (const auto& lane : automation) {
@@ -91,6 +118,25 @@ double Project::durationBeats() const {
         for (const auto& event : track.events)
             duration = std::max(duration, event.startBeat + event.durationBeats);
     return duration;
+}
+
+double Project::beatToSeconds(double beat) const {
+    if (beat <= 0.0) return 0.0;
+    double cursorBeat = 0.0;
+    double seconds = 0.0;
+    double bpm = config.tempo;
+    for (const auto& point : tempoMap) {
+        if (point.beat > beat) break;
+        if (point.beat > cursorBeat)
+            seconds += (point.beat - cursorBeat) * 60.0 / bpm;
+        cursorBeat = point.beat;
+        bpm = point.bpm;
+    }
+    return seconds + (beat - cursorBeat) * 60.0 / bpm;
+}
+
+double Project::durationSeconds(double startBeat, double durationBeats) const {
+    return beatToSeconds(startBeat + durationBeats) - beatToSeconds(startBeat);
 }
 
 } // namespace lyra

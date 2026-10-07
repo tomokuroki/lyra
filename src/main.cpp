@@ -242,11 +242,11 @@ song MyFirstSong {
         }
 
         if (cfg.format == ExportFormat::MIDI) {
-            writeMidi(outputFile, parser.events, parser.config);
+            writeMidi(outputFile, parser.project);
         } else if (cfg.format == ExportFormat::JSON) {
-            writeJson(outputFile, parser.events, parser.config);
+            writeJson(outputFile, parser.project);
         } else {
-            auto audio = generateSamples(parser.events, parser.config);
+            auto audio = generateSamples(parser.project);
             if (cfg.format == ExportFormat::WAV)
                 writeWav(outputFile, audio, parser.config);
             else if (cfg.format == ExportFormat::AIFF)

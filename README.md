@@ -2,6 +2,9 @@
 
 **A minimal, extensible music programming language** written in pure C++17.
 
+The active programmable-DAW roadmap is tracked in
+[docs/TODO_DAW_RU.md](docs/TODO_DAW_RU.md).
+
 ## Lyra 3.0
 
 Lyra 3 adds mutable indexed lists, collection operations, scalar functions

@@ -648,8 +648,10 @@ std::vector<std::string> Frontend::expand(const std::vector<std::string>& lines,
             std::map<std::string, std::string> macroLocals = locals;
             for (size_t p = 0; p < args.size(); ++p)
                 macroLocals[macroIt->second.params[p]] = resolve(args[p]);
+            if (kind == "play") output.push_back("patternbegin " + match[2].str());
             auto expanded = expand(macroIt->second.body, baseDir, macroLocals, transpose);
             output.insert(output.end(), expanded.begin(), expanded.end());
+            if (kind == "play") output.push_back("patternend");
             continue;
         }
 

@@ -259,7 +259,8 @@ void writeAiff(const std::string& filename, const AudioBuffer& audio, const Conf
     if (soundChunkSize & 1) out.put(0);
 }
 
-void writeJson(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+static void writeJsonImpl(const std::string& filename, const std::vector<NoteEvent>& events,
+                          const Config& cfg, const Project* project) {
     std::ofstream out(filename);
     if (!out) throw std::runtime_error("Cannot create JSON file: " + filename);
     out << std::setprecision(15);
@@ -275,8 +276,33 @@ void writeJson(const std::string& filename, const std::vector<NoteEvent>& events
         << "  \"channels\": " << cfg.channels << ",\n"
         << "  \"metadata\": {\"title\": \"" << jsonEscape(cfg.title)
         << "\", \"artist\": \"" << jsonEscape(cfg.artist)
-        << "\", \"album\": \"" << jsonEscape(cfg.album) << "\"},\n"
-        << "  \"events\": [\n";
+        << "\", \"album\": \"" << jsonEscape(cfg.album) << "\"},\n";
+    if (project) {
+        out << "  \"tempo_map\": [";
+        for (size_t i = 0; i < project->tempoMap.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"beat\": " << project->tempoMap[i].beat
+                << ", \"bpm\": " << project->tempoMap[i].bpm << "}";
+        }
+        out << "],\n  \"sections\": [";
+        for (size_t i = 0; i < project->sections.size(); ++i) {
+            if (i) out << ", ";
+            out << "{\"name\": \"" << jsonEscape(project->sections[i].name)
+                << "\", \"start_beat\": " << project->sections[i].startBeat
+                << ", \"length_beats\": " << project->sections[i].lengthBeats << "}";
+        }
+        out << "],\n  \"arrangement\": [";
+        for (size_t i = 0; i < project->arrangement.size(); ++i) {
+            if (i) out << ", ";
+            const auto& placement = project->arrangement[i];
+            out << "{\"pattern\": \"" << jsonEscape(placement.pattern)
+                << "\", \"track\": \"" << jsonEscape(placement.trackId)
+                << "\", \"start_beat\": " << placement.startBeat
+                << ", \"length_beats\": " << placement.lengthBeats << "}";
+        }
+        out << "],\n";
+    }
+    out << "  \"events\": [\n";
     for (size_t i = 0; i < events.size(); ++i) {
         const auto& event = events[i];
         out << "    {\"track\": \"" << jsonEscape(event.trackId)
@@ -302,6 +328,14 @@ void writeJson(const std::string& filename, const std::vector<NoteEvent>& events
         out << '\n';
     }
     out << "  ]\n}\n";
+}
+
+void writeJson(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+    writeJsonImpl(filename, events, cfg, nullptr);
+}
+
+void writeJson(const std::string& filename, const Project& project) {
+    writeJsonImpl(filename, project.renderEvents(), project.config, &project);
 }
 
 void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
@@ -330,7 +364,8 @@ void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
         throw std::runtime_error("FFmpeg export failed. Install FFmpeg and ensure `ffmpeg` is available in PATH");
 }
 
-void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+static void writeMidiImpl(const std::string& filename, const std::vector<NoteEvent>& events,
+                          const Config& cfg, const Project* project) {
     const int TPQ = 480;
     std::vector<uint8_t> track;
 
@@ -378,6 +413,17 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
         std::vector<uint8_t> data;
     };
     std::vector<MidiMessage> messages;
+    if (project) {
+        for (const auto& point : project->tempoMap) {
+            if (point.beat <= 0.0) continue;
+            const uint32_t tick = static_cast<uint32_t>(point.beat * TPQ + 0.5);
+            const uint32_t micros = static_cast<uint32_t>(60000000.0 / point.bpm);
+            messages.push_back({tick, -1, {0xFF, 0x51, 0x03,
+                static_cast<uint8_t>((micros >> 16) & 0xFF),
+                static_cast<uint8_t>((micros >> 8) & 0xFF),
+                static_cast<uint8_t>(micros & 0xFF)}});
+        }
+    }
 
     auto melodicChannel = [](InstrumentType instrument) {
         int channel = static_cast<int>(instrument);
@@ -484,6 +530,14 @@ void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events
     out.write("MTrk", 4);
     writeBE32(static_cast<uint32_t>(track.size()));
     out.write(reinterpret_cast<const char*>(track.data()), track.size());
+}
+
+void writeMidi(const std::string& filename, const std::vector<NoteEvent>& events, const Config& cfg) {
+    writeMidiImpl(filename, events, cfg, nullptr);
+}
+
+void writeMidi(const std::string& filename, const Project& project) {
+    writeMidiImpl(filename, project.renderEvents(), project.config, &project);
 }
 
 } // namespace lyra

@@ -24,6 +24,13 @@ void Parser::parse(const std::string& source) {
     double trackVol = 0.7;
     double linearTime = 0.0;
     int activeTrack = -1;
+    struct PatternFrame {
+        std::string name;
+        std::string trackId;
+        double startBeat = 0.0;
+        int sourceLine = 0;
+    };
+    std::vector<PatternFrame> patternStack;
 
     Track globalTrack;
     globalTrack.id = "__global";
@@ -82,7 +89,18 @@ void Parser::parse(const std::string& source) {
             if (cmd == "tempo") {
                 double t;
                 if (!(ls >> t) || t <= 0.0) throw std::runtime_error("tempo must be > 0");
-                config.tempo = t;
+                std::string at;
+                double beat = 0.0;
+                if (ls >> at) {
+                    if (toLower(at) != "at" || !(ls >> beat) || beat < 0.0)
+                        throw std::runtime_error("usage: tempo <bpm> [at <beat>]");
+                    if (beat == 0.0) config.tempo = t;
+                } else {
+                    config.tempo = t;
+                    project.tempoMap.erase(std::remove_if(project.tempoMap.begin(), project.tempoMap.end(),
+                        [](const TempoPoint& point) { return point.beat == 0.0; }), project.tempoMap.end());
+                }
+                project.tempoMap.push_back(TempoPoint{beat, t, lineNum});
             }
             else if (cmd == "time") {
                 std::string signature;
@@ -282,6 +300,37 @@ void Parser::parse(const std::string& source) {
                 }
                 project.markers.push_back(Marker{name, beat, lineNum});
             }
+            else if (cmd == "grid") {
+                std::string division, option;
+                if (!(ls >> division)) throw std::runtime_error("usage: grid <1/4|1/8|1/16|1/32> [triplet]");
+                const size_t slash = division.find('/');
+                if (slash == std::string::npos || division.substr(0, slash) != "1")
+                    throw std::runtime_error("grid must be written as 1/<division>");
+                const int denominator = std::stoi(division.substr(slash + 1));
+                if (denominator < 1 || denominator > 128 || (denominator & (denominator - 1)) != 0)
+                    throw std::runtime_error("grid division must be a power of two from 1 to 128");
+                project.timeline.gridBeats = 4.0 / denominator;
+                if (ls >> option) {
+                    if (toLower(option) != "triplet") throw std::runtime_error("grid option must be triplet");
+                    project.timeline.gridBeats *= 2.0 / 3.0;
+                }
+            }
+            else if (cmd == "swing") {
+                double percent;
+                if (!(ls >> percent) || percent < 50.0 || percent > 75.0)
+                    throw std::runtime_error("swing must be between 50 (straight) and 75 percent");
+                project.timeline.swingPercent = percent;
+            }
+            else if (cmd == "section") {
+                std::string name, at, length;
+                double startBeat, lengthBeats;
+                if (!(ls >> name >> at >> startBeat >> length >> lengthBeats) ||
+                    toLower(at) != "at" || toLower(length) != "length" ||
+                    startBeat < 0.0 || lengthBeats <= 0.0)
+                    throw std::runtime_error("usage: section <name> at <beat> length <beats>");
+                project.sections.push_back(Section{name, startBeat, lengthBeats, lineNum});
+                project.markers.push_back(Marker{name, startBeat, lineNum});
+            }
             else if (cmd == "track") {
                 if (inTrack) throw std::runtime_error("tracks cannot be nested");
                 std::string name;
@@ -346,6 +395,28 @@ void Parser::parse(const std::string& source) {
                     throw std::runtime_error("usage: rest <beats>");
                 if (inTrack) trackTime += beats;
                 else linearTime += beats;
+            }
+            else if (cmd == "at") {
+                double beat;
+                if (!(ls >> beat) || beat < 0.0) throw std::runtime_error("usage: at <beat>");
+                if (inTrack) trackTime = beat;
+                else linearTime = beat;
+            }
+            else if (cmd == "patternbegin") {
+                std::string name;
+                if (!(ls >> name)) throw std::runtime_error("patternbegin requires a name");
+                const std::string trackId = activeTrack >= 0
+                    ? project.tracks[static_cast<size_t>(activeTrack)].id : globalTrack.id;
+                patternStack.push_back(PatternFrame{name, trackId,
+                    inTrack ? trackTime : linearTime, lineNum});
+            }
+            else if (cmd == "patternend") {
+                if (patternStack.empty()) throw std::runtime_error("patternend without patternbegin");
+                const auto frame = patternStack.back();
+                patternStack.pop_back();
+                const double endBeat = inTrack ? trackTime : linearTime;
+                project.arrangement.push_back(PatternPlacement{frame.name, frame.trackId,
+                    frame.startBeat, std::max(0.0, endBeat - frame.startBeat), frame.sourceLine});
             }
             else if (cmd == "degree") {
                 int degree, octave;
@@ -519,6 +590,8 @@ void Parser::parse(const std::string& source) {
 
     if (!loopStack.empty())
         throw std::runtime_error("Unclosed loop {");
+    if (!patternStack.empty())
+        throw std::runtime_error("Unclosed pattern placement");
     if (inTrack)
         throw std::runtime_error("Unclosed track {");
 
@@ -531,6 +604,10 @@ void Parser::parse(const std::string& source) {
     }
     if (project.tracks.front().events.empty()) project.tracks.erase(project.tracks.begin());
     project.config = config;
+    std::stable_sort(project.tempoMap.begin(), project.tempoMap.end(),
+        [](const TempoPoint& a, const TempoPoint& b) { return a.beat < b.beat; });
+    if (project.tempoMap.empty() || project.tempoMap.front().beat > 0.0)
+        project.tempoMap.insert(project.tempoMap.begin(), TempoPoint{0.0, config.tempo, 0});
     project.validate();
     events = project.renderEvents();
 }

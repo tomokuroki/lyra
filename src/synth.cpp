@@ -219,7 +219,8 @@ static void renderDrum(const NoteEvent& ev, size_t startS, size_t nS,
     }
 }
 
-AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
+static AudioBuffer generateSamplesImpl(const std::vector<NoteEvent>& events, const Config& cfg,
+                                       const Project* project) {
     if (events.empty()) return AudioBuffer{{}, cfg.channels};
 
     double maxBeat = 0.0;
@@ -229,14 +230,17 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
     double beatSec = 60.0 / cfg.tempo;
     double effectTail = (cfg.reverb > 0.0 ? 1.4 : 0.0)
                       + (cfg.delayMix > 0.0 ? cfg.delayBeats * beatSec * 2.0 : 0.0);
-    double totalSec = maxBeat * beatSec + effectTail;
+    double totalSec = (project ? project->beatToSeconds(maxBeat) : maxBeat * beatSec) + effectTail;
     size_t totalSamples = static_cast<size_t>(totalSec * cfg.sampleRate + 0.5);
     std::vector<double> mixL(totalSamples, 0.0);
     std::vector<double> mixR(totalSamples, 0.0);
 
     for (const auto& ev : events) {
-        size_t startS = static_cast<size_t>(ev.startBeat * (60.0 / cfg.tempo) * cfg.sampleRate);
-        size_t nS = static_cast<size_t>(ev.durationBeats * (60.0 / cfg.tempo) * cfg.sampleRate + 0.5);
+        const double startSec = project ? project->beatToSeconds(ev.startBeat) : ev.startBeat * beatSec;
+        const double durationSec = project ? project->durationSeconds(ev.startBeat, ev.durationBeats)
+                                           : ev.durationBeats * beatSec;
+        size_t startS = static_cast<size_t>(startSec * cfg.sampleRate + 0.5);
+        size_t nS = static_cast<size_t>(durationSec * cfg.sampleRate + 0.5);
         if (nS == 0) continue;
 
         if (ev.drum != DrumType::None) {
@@ -247,7 +251,7 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
         size_t voices = std::min(ev.freqs.size(), size_t(8));
         if (voices == 0) continue;
 
-        double durSec = ev.durationBeats * (60.0 / cfg.tempo);
+        double durSec = durationSec;
         double filterState = 0.0;
         double filterAlpha = ev.cutoff > 0.0
             ? std::min(1.0, 1.0 - std::exp(-2.0 * PI * ev.cutoff / cfg.sampleRate)) : 1.0;
@@ -413,6 +417,14 @@ AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& 
         }
     }
     return out;
+}
+
+AudioBuffer generateSamples(const std::vector<NoteEvent>& events, const Config& cfg) {
+    return generateSamplesImpl(events, cfg, nullptr);
+}
+
+AudioBuffer generateSamples(const Project& project) {
+    return generateSamplesImpl(project.renderEvents(), project.config, &project);
 }
 
 } // namespace lyra
