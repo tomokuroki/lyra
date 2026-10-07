@@ -10,6 +10,7 @@ add_executable(lyra
     src/project.cpp
     src/dsp.cpp
     src/audio_file.cpp
+    src/analysis.cpp
     src/synth.cpp
     src/export.cpp
     src/frontend.cpp
@@ -56,4 +57,10 @@ if(BUILD_TESTING)
             "-DSOURCE_SONG=${CMAKE_CURRENT_SOURCE_DIR}/examples/assets/clip_source.lyra"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_audio_clips.cmake")
+    add_test(NAME lyra_export_mastering
+        COMMAND "${CMAKE_COMMAND}"
+            "-DLYRA_EXE=$<TARGET_FILE:lyra>"
+            "-DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/lyra3/export_mastering.lyra"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/verify_export_mastering.cmake")
 endif()

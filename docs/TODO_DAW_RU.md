@@ -51,7 +51,8 @@
 - [~] Stereo widener и auto-pan готовы; нужна pitch correction.
 - [ ] Oversampling для нелинейных эффектов.
 - [ ] Mastering chain и loudness targets.
-- [ ] Peak/LUFS/spectrum/oscilloscope/stereo meters.
+- [~] Офлайн JSON-анализ: peak/RMS, приближённый LUFS, spectrum, waveform,
+  clipping и stereo correlation; нужны BS.1770 gating и realtime meters.
 
 ## 5. Mixer и routing
 
@@ -69,9 +70,9 @@
 - [ ] MIDI import, live input и MIDI CC.
 - [x] WAV/AIFF/JSON export.
 - [x] FLAC/MP3/OGG через FFmpeg.
-- [ ] AAC export.
-- [ ] Stem export.
-- [~] 44.1/48/96 kHz и 8/16/24 bit; нужны 192 kHz и 32-bit float.
+- [x] AAC/M4A export через FFmpeg.
+- [x] Stem export всех mixer tracks с routing/master processing.
+- [x] 44.1/48/96/192 kHz и WAV 8/16/24-bit PCM или 32-bit IEEE float.
 - [~] `.lyra` source project; нужны manifest, assets и portable bundle.
 - [x] Presets, reusable modules и standard library.
 

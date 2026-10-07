@@ -99,7 +99,8 @@ enum class ExportFormat {
     JSON,
     FLAC,
     MP3,
-    OGG
+    OGG,
+    AAC
 };
 
 enum class ScaleType {
@@ -209,8 +210,9 @@ inline ExportFormat parseExportFormat(const std::string& value) {
     if (format == "flac") return ExportFormat::FLAC;
     if (format == "mp3") return ExportFormat::MP3;
     if (format == "ogg" || format == "vorbis") return ExportFormat::OGG;
+    if (format == "aac" || format == "m4a") return ExportFormat::AAC;
     throw std::runtime_error("Unknown export format: " + value +
-        ". Expected wav, midi, aiff, json, flac, mp3, or ogg");
+        ". Expected wav, midi, aiff, json, flac, mp3, ogg, or aac");
 }
 
 inline std::string exportFormatToString(ExportFormat format) {
@@ -222,6 +224,7 @@ inline std::string exportFormatToString(ExportFormat format) {
         case ExportFormat::FLAC: return "FLAC";
         case ExportFormat::MP3: return "MP3";
         case ExportFormat::OGG: return "OGG";
+        case ExportFormat::AAC: return "AAC";
     }
     return "WAV";
 }
@@ -235,6 +238,7 @@ inline std::string exportFormatExtension(ExportFormat format) {
         case ExportFormat::FLAC: return ".flac";
         case ExportFormat::MP3: return ".mp3";
         case ExportFormat::OGG: return ".ogg";
+        case ExportFormat::AAC: return ".m4a";
     }
     return ".wav";
 }

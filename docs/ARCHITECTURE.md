@@ -30,7 +30,12 @@ mature language implementations (parser → intermediate representation → back
         │
         ▼
 ┌───────────────┐
-│    Export     │   writes    .wav  or  .mid
+│   Analysis    │   derives deterministic offline meter data
+└───────────────┘
+        │ AudioBuffer + optional report
+        ▼
+┌───────────────┐
+│    Export     │   writes audio, MIDI, events, stems, or analysis JSON
 └───────────────┘
 ```
 
@@ -54,6 +59,7 @@ automation order and mixer values are rejected before rendering.
 | `audio_file.*`  | WAV/AIFF and optional FFmpeg asset decode  | Samplers and audio clip formats      |
 | `parser.*`      | Text → list of `NoteEvent`                | New syntax / commands                |
 | `synth.*`       | `NoteEvent` → PCM samples                 | New synthesis, effects, stereo       |
+| `analysis.*`    | PCM → peak/LUFS/spectrum/waveform report  | Metering and loudness standards      |
 | `export.*`      | PCM / events → audio and data files       | New codecs and event formats         |
 | `main.cpp`      | Command-line interface                    | New flags, batch mode, REPL          |
 

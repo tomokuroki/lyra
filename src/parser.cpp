@@ -261,14 +261,14 @@ void Parser::parse(const std::string& source) {
             }
             else if (cmd == "samplerate") {
                 int rate;
-                if (!(ls >> rate) || (rate != 44100 && rate != 48000 && rate != 96000))
-                    throw std::runtime_error("samplerate must be 44100, 48000, or 96000");
+                if (!(ls >> rate) || (rate != 44100 && rate != 48000 && rate != 96000 && rate != 192000))
+                    throw std::runtime_error("samplerate must be 44100, 48000, 96000, or 192000");
                 config.sampleRate = rate;
             }
             else if (cmd == "bitdepth") {
                 int bits;
-                if (!(ls >> bits) || (bits != 8 && bits != 16 && bits != 24))
-                    throw std::runtime_error("bitdepth must be 8, 16, or 24");
+                if (!(ls >> bits) || (bits != 8 && bits != 16 && bits != 24 && bits != 32))
+                    throw std::runtime_error("bitdepth must be 8, 16, 24, or 32-float");
                 config.bits = bits;
             }
             else if (cmd == "channels") {

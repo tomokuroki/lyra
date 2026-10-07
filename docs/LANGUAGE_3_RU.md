@@ -273,6 +273,29 @@ clip gain в dB, reverse, looping, crossfade, pitch и stretch. Нескольк
 
 Исполняемый пример: `examples/lyra3/audio_clips.lyra`.
 
+## Экспорт, стемы и анализ
+
+Lyra экспортирует WAV, MIDI, AIFF и JSON нативно. FLAC, MP3, OGG и AAC/M4A
+кодируются через FFmpeg. WAV поддерживает 44.1/48/96/192 кГц, 8/16/24-bit PCM
+и 32-bit IEEE float.
+
+```text
+lyra -r 192000 -b 32 song.lyra master.wav
+lyra -f aac song.lyra master.m4a
+lyra --stems stems --analysis meters.json song.lyra master.wav
+lyra analyze song.lyra meters.json
+```
+
+`--stems <directory>` создаёт отдельный WAV для каждой mixer track, сохраняя её
+insert-цепочку, sends, bus returns и master processing. `--analysis <file>`
+добавляет к обычному рендеру JSON-отчёт, а команда `analyze` создаёт только этот
+отчёт. В него входят peak/RMS dBFS, приближённый integrated LUFS, stereo
+correlation, число clipped samples, 32 спектральные полосы и 256 waveform peaks.
+Текущий LUFS пригоден для быстрой проверки, но ещё не реализует полный
+BS.1770/EBU R128 gating.
+
+Исполняемый пример: `examples/lyra3/export_mastering.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

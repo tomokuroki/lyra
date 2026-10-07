@@ -13,7 +13,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
     std::ofstream out(filename, std::ios::binary);
     if (!out) throw std::runtime_error("Cannot create file: " + filename);
 
-    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24) ? static_cast<uint16_t>(cfg.bits) : 16;
+    uint16_t bits = (cfg.bits == 8 || cfg.bits == 24 || cfg.bits == 32) ? static_cast<uint16_t>(cfg.bits) : 16;
     uint16_t channels = static_cast<uint16_t>(audio.channels);
     uint32_t dataSize = static_cast<uint32_t>(audio.samples.size() * (bits / 8));
     uint32_t rate = static_cast<uint32_t>(cfg.sampleRate);
@@ -45,7 +45,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
     out.write("fmt ", 4);
     uint32_t fmtSize = 16;
     out.write(reinterpret_cast<const char*>(&fmtSize), 4);
-    uint16_t audioFormat = 1;
+    uint16_t audioFormat = bits == 32 ? 3 : 1;
     out.write(reinterpret_cast<const char*>(&audioFormat), 2);
     out.write(reinterpret_cast<const char*>(&channels), 2);
     out.write(reinterpret_cast<const char*>(&rate), 4);
@@ -68,7 +68,7 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
             int16_t value = static_cast<int16_t>(std::lround(clamped * 32767.0));
             out.write(reinterpret_cast<const char*>(&value), 2);
         }
-    } else {
+    } else if (bits == 24) {
         for (float sample : audio.samples) {
             double clamped = std::max(-1.0, std::min(1.0, static_cast<double>(sample)));
             int32_t value = static_cast<int32_t>(std::lround(clamped * 8388607.0));
@@ -79,6 +79,9 @@ void writeWav(const std::string& filename, const AudioBuffer& audio, const Confi
             };
             out.write(reinterpret_cast<const char*>(bytes), 3);
         }
+    } else {
+        out.write(reinterpret_cast<const char*>(audio.samples.data()),
+                  static_cast<std::streamsize>(audio.samples.size() * sizeof(float)));
     }
     if (dataSize & 1) out.put(0);
     if (!info.empty()) {
@@ -426,7 +429,8 @@ void writeJson(const std::string& filename, const Project& project) {
 
 void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
                           const Config& cfg, ExportFormat format) {
-    if (format != ExportFormat::FLAC && format != ExportFormat::MP3 && format != ExportFormat::OGG)
+    if (format != ExportFormat::FLAC && format != ExportFormat::MP3 &&
+        format != ExportFormat::OGG && format != ExportFormat::AAC)
         throw std::runtime_error("Compressed exporter received a non-compressed format");
 
     auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -439,7 +443,8 @@ void writeCompressedAudio(const std::string& filename, const AudioBuffer& audio,
     std::string codec;
     if (format == ExportFormat::FLAC) codec = "-c:a flac";
     else if (format == ExportFormat::MP3) codec = "-c:a libmp3lame -q:a 2";
-    else codec = "-c:a libvorbis -q:a 6";
+    else if (format == ExportFormat::OGG) codec = "-c:a libvorbis -q:a 6";
+    else codec = "-c:a aac -b:a 256k";
 
     std::string command = "ffmpeg -nostdin -hide_banner -loglevel error -y -i "
         + temporaryArgument + " " + codec + " " + outputArgument;

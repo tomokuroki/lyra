@@ -13,7 +13,7 @@ and a recursive `lyra test` project runner. See the
 [Russian Lyra 3 guide](docs/LANGUAGE_3_RU.md).
 
 Lyra lets you compose music with a simple text-based syntax and render it to
-WAV, MIDI, AIFF, JSON, FLAC, MP3, or OGG.
+WAV, MIDI, AIFF, JSON, FLAC, MP3, OGG, or AAC/M4A.
 Designed to be easy to read, easy to extend, and easy to contribute to.
 
 ## Lyra 2.1 language front-end
@@ -55,11 +55,12 @@ track drums {
   FM synthesis, modern chiptune, and clean modern
 - Built-in room reverb and tempo-synced delay
 - Interpreter-style `run`, `check`, and `init` commands
-- Release WAV export: stereo, true 24-bit PCM, 48/96 kHz, safe master peak
+- Release WAV export up to 192 kHz: 8/16/24-bit PCM or 32-bit IEEE float
 - Track panning, fades, metadata, and streaming/CD/hi-res master presets
 - Loops and chords
 - Native export to **WAV**, **MIDI**, **AIFF**, and event **JSON**
-- **FLAC**, **MP3**, and **OGG** export through FFmpeg
+- **FLAC**, **MP3**, **OGG**, and **AAC/M4A** export through FFmpeg
+- Per-track stem export and offline peak/RMS/LUFS/spectrum/waveform analysis
 - Zero external dependencies for the language and native exporters
 - Clean modular architecture
 - Validated Project IR with named tracks, mixer state, markers, and automation
@@ -81,7 +82,8 @@ mkdir build && cd build && cmake .. && make
 ./lyra -f midi examples/full_song.lyra
 ./lyra -f json examples/full_song.lyra
 ./lyra -f flac examples/full_song.lyra
-./lyra -r 22050 -w square song.lyra out.wav
+./lyra -r 192000 -b 32 song.lyra out.wav
+./lyra --stems stems --analysis meters.json song.lyra master.wav
 ```
 
 ## Documentation
@@ -103,11 +105,12 @@ lyra/
 │   ├── audio_file.hpp/cpp # Audio asset decoding
 │   ├── parser.hpp/cpp  # Command stream → Project IR
 │   ├── synth.hpp/cpp   # Synthesis engine
+│   ├── analysis.hpp/cpp # Offline audio meters and analyzer data
 │   ├── export.hpp/cpp  # Audio, MIDI, and event-data back-end
 │   └── main.cpp        # CLI
 ├── examples/           # Example compositions
 ├── docs/               # Full documentation
-├── tests/              # (placeholder for future tests)
+├── tests/              # Regression and integration tests
 ├── Makefile
 ├── CMakeLists.txt
 ├── LICENSE
