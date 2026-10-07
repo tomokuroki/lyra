@@ -89,6 +89,11 @@ enum class ExportFormat {
 };
 
 struct NoteEvent {
+    // Stable ownership information used by the project IR.  Exporters and the
+    // synthesizer deliberately do not depend on it, so old integrations that
+    // construct NoteEvent directly remain source compatible.
+    std::string trackId;
+    int sourceLine = 0;
     double startBeat = 0.0;
     std::vector<double> freqs;
     double durationBeats = 0.0;

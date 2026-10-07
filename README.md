@@ -59,6 +59,7 @@ track drums {
 - **FLAC**, **MP3**, and **OGG** export through FFmpeg
 - Zero external dependencies for the language and native exporters
 - Clean modular architecture
+- Validated Project IR with named tracks, mixer state, markers, and automation
 
 ## Quick Start
 
@@ -94,7 +95,8 @@ mkdir build && cd build && cmake .. && make
 lyra/
 ├── src/
 │   ├── common.hpp      # Shared types & utilities
-│   ├── parser.hpp/cpp  # Language front-end
+│   ├── project.hpp/cpp # Validated song intermediate representation
+│   ├── parser.hpp/cpp  # Command stream → Project IR
 │   ├── synth.hpp/cpp   # Synthesis engine
 │   ├── export.hpp/cpp  # Audio, MIDI, and event-data back-end
 │   └── main.cpp        # CLI

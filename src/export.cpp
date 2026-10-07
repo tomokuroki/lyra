@@ -279,7 +279,9 @@ void writeJson(const std::string& filename, const std::vector<NoteEvent>& events
         << "  \"events\": [\n";
     for (size_t i = 0; i < events.size(); ++i) {
         const auto& event = events[i];
-        out << "    {\"start_beat\": " << event.startBeat
+        out << "    {\"track\": \"" << jsonEscape(event.trackId)
+            << "\", \"source_line\": " << event.sourceLine
+            << ", \"start_beat\": " << event.startBeat
             << ", \"duration_beats\": " << event.durationBeats
             << ", \"frequencies_hz\": [";
         for (size_t f = 0; f < event.freqs.size(); ++f) {

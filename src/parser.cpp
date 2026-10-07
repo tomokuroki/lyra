@@ -5,6 +5,8 @@
 namespace lyra {
 
 void Parser::parse(const std::string& source) {
+    events.clear();
+    project = Project{};
     std::istringstream iss(source);
     std::string line;
     int lineNum = 0;
@@ -21,6 +23,12 @@ void Parser::parse(const std::string& source) {
     double trackDrive = 0.0;
     double trackVol = 0.7;
     double linearTime = 0.0;
+    int activeTrack = -1;
+
+    Track globalTrack;
+    globalTrack.id = "__global";
+    globalTrack.name = "Global";
+    project.tracks.push_back(globalTrack);
 
     struct LoopFrame {
         std::vector<NoteEvent> body;
@@ -30,6 +38,10 @@ void Parser::parse(const std::string& source) {
     std::vector<LoopFrame> loopStack;
 
     auto addEvent = [&](NoteEvent ev) {
+        ev.trackId = activeTrack >= 0
+            ? project.tracks[static_cast<size_t>(activeTrack)].id
+            : globalTrack.id;
+        ev.sourceLine = lineNum;
         if (!loopStack.empty())
             loopStack.back().body.push_back(ev);
         else
@@ -208,7 +220,82 @@ void Parser::parse(const std::string& source) {
                 if (!inTrack) throw std::runtime_error("pan can only be used inside a track");
                 trackPan = pan / 100.0;
             }
+            else if (cmd == "mute" || cmd == "solo") {
+                if (!inTrack || activeTrack < 0)
+                    throw std::runtime_error(cmd + " can only be used inside a track");
+                std::string value;
+                if (!(ls >> value)) value = "true";
+                value = toLower(value);
+                if (value != "true" && value != "false" && value != "on" && value != "off")
+                    throw std::runtime_error(cmd + " expects true/false or on/off");
+                const bool enabled = value == "true" || value == "on";
+                if (cmd == "mute") project.tracks[static_cast<size_t>(activeTrack)].mixer.mute = enabled;
+                else project.tracks[static_cast<size_t>(activeTrack)].mixer.solo = enabled;
+            }
+            else if (cmd == "gain") {
+                if (!inTrack || activeTrack < 0)
+                    throw std::runtime_error("gain can only be used inside a track");
+                double db;
+                if (!(ls >> db) || !std::isfinite(db) || db < -96.0 || db > 24.0)
+                    throw std::runtime_error("gain must be between -96 and 24 dB");
+                project.tracks[static_cast<size_t>(activeTrack)].mixer.gain = std::pow(10.0, db / 20.0);
+            }
+            else if (cmd == "automate") {
+                if (!inTrack || activeTrack < 0)
+                    throw std::runtime_error("automate can only be used inside a track");
+                std::string parameter, at, curveName = "linear";
+                double beat, value;
+                if (!(ls >> parameter >> at >> beat >> value) || toLower(at) != "at" || beat < 0.0)
+                    throw std::runtime_error("usage: automate <volume|pan|cutoff|drive> at <beat> <value> [linear|step]");
+                parameter = toLower(parameter);
+                if (parameter != "volume" && parameter != "pan" && parameter != "cutoff" && parameter != "drive")
+                    throw std::runtime_error("automation parameter must be volume, pan, cutoff, or drive");
+                if ((parameter == "volume" || parameter == "drive") && (value < 0.0 || value > 100.0))
+                    throw std::runtime_error(parameter + " automation must be 0-100");
+                if (parameter == "pan" && (value < -100.0 || value > 100.0))
+                    throw std::runtime_error("pan automation must be -100 to 100");
+                if (parameter == "cutoff" && value < 0.0)
+                    throw std::runtime_error("cutoff automation must be >= 0");
+                if (ls >> curveName) curveName = toLower(curveName);
+                if (curveName != "linear" && curveName != "step")
+                    throw std::runtime_error("automation curve must be linear or step");
+                const std::string& trackId = project.tracks[static_cast<size_t>(activeTrack)].id;
+                auto lane = std::find_if(project.automation.begin(), project.automation.end(),
+                    [&](const AutomationLane& item) { return item.trackId == trackId && item.parameter == parameter; });
+                if (lane == project.automation.end()) {
+                    project.automation.push_back(AutomationLane{trackId, parameter, {}});
+                    lane = std::prev(project.automation.end());
+                }
+                if (!lane->points.empty() && beat < lane->points.back().beat)
+                    throw std::runtime_error("automation points must be written in beat order");
+                lane->points.push_back(AutomationPoint{beat, value,
+                    curveName == "step" ? AutomationCurve::Step : AutomationCurve::Linear, lineNum});
+            }
+            else if (cmd == "marker") {
+                std::string name;
+                double beat = inTrack ? trackTime : linearTime;
+                if (!(ls >> name)) throw std::runtime_error("usage: marker <name> [beat]");
+                if (name.size() >= 2 && name.front() == '"' && name.back() == '"')
+                    name = name.substr(1, name.size() - 2);
+                if (ls >> beat) {
+                    if (beat < 0.0) throw std::runtime_error("marker beat must be >= 0");
+                }
+                project.markers.push_back(Marker{name, beat, lineNum});
+            }
             else if (cmd == "track") {
+                if (inTrack) throw std::runtime_error("tracks cannot be nested");
+                std::string name;
+                if (!(ls >> name)) throw std::runtime_error("usage: track <name> {");
+                if (name == "{") throw std::runtime_error("track requires a name");
+                auto duplicate = std::find_if(project.tracks.begin(), project.tracks.end(),
+                    [&](const Track& item) { return item.id == name; });
+                if (duplicate != project.tracks.end())
+                    throw std::runtime_error("duplicate track name: " + name);
+                Track track;
+                track.id = name;
+                track.name = name;
+                project.tracks.push_back(track);
+                activeTrack = static_cast<int>(project.tracks.size() - 1);
                 inTrack = true;
                 trackTime = 0.0;
                 trackWave = config.wave;
@@ -223,6 +310,7 @@ void Parser::parse(const std::string& source) {
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
                 inTrack = false;
+                activeTrack = -1;
             }
             else if (cmd == "note") {
                 std::string name;
@@ -391,7 +479,7 @@ void Parser::parse(const std::string& source) {
             }
             else if (cmd == "}") {
                 if (loopStack.empty()) {
-                    if (inTrack) { inTrack = false; continue; }
+                    if (inTrack) { inTrack = false; activeTrack = -1; continue; }
                     throw std::runtime_error("Unexpected '}'");
                 }
 
@@ -431,6 +519,20 @@ void Parser::parse(const std::string& source) {
 
     if (!loopStack.empty())
         throw std::runtime_error("Unclosed loop {");
+    if (inTrack)
+        throw std::runtime_error("Unclosed track {");
+
+    for (const auto& event : events) {
+        auto track = std::find_if(project.tracks.begin(), project.tracks.end(),
+            [&](const Track& item) { return item.id == event.trackId; });
+        if (track == project.tracks.end())
+            throw std::runtime_error("Internal error: event targets unknown track " + event.trackId);
+        track->events.push_back(event);
+    }
+    if (project.tracks.front().events.empty()) project.tracks.erase(project.tracks.begin());
+    project.config = config;
+    project.validate();
+    events = project.renderEvents();
 }
 
 } // namespace lyra

@@ -1,0 +1,23 @@
+# Lyra 3 project IR: mixer state, markers and deterministic automation.
+tempo 120
+time 4/4
+
+track lead {
+  instrument piano
+  gain -3
+  pan 10
+  marker intro 0
+  automate volume at 0 40 linear
+  automate volume at 4 100 linear
+  automate cutoff at 0 1200 step
+  automate cutoff at 4 6000 linear
+  note C5 1
+  note E5 1
+  note G5 2
+}
+
+track guide {
+  mute true
+  wave sine
+  note C4 4
+}
