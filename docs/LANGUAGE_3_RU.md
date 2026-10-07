@@ -160,6 +160,41 @@ track lead {
 
 Исполняемый пример: `examples/lyra3/dsp_graph.lyra`.
 
+Sidechain задаётся на дорожке-приёмнике и ссылается на именованную дорожку-
+источник:
+
+```lyra
+track bass {
+  sidechain drums amount=100 threshold=-30 ratio=8 attack=2 release=180
+  note C2 4
+}
+```
+
+Envelope follower использует отдельные attack/release и действительно изменяет
+PCM; интеграционный тест сравнивает WAV с маршрутом и без него.
+
+## Multi-oscillator synth, unison, FM/AM и ADSR
+
+```lyra
+track pad {
+  osc saw level=65 detune=-4
+  osc square level=25 detune=5 semitones=-12
+  osc sine level=20 semitones=12
+  unison 8 detune=14
+  adsr 0.03 0.25 62 0.35
+  fm 2 0.7
+  am 3.5 18
+  chord C4 E4 G4 B4 2
+}
+```
+
+`osc` добавляет генераторы в порядке объявления. `level` задаётся в процентах,
+`detune` — в центах, `semitones` — в полутонах. `unison` принимает
+1/2/4/8/16 голосов. `fm` принимает ratio и modulation index, `am` — частоту
+и глубину в процентах. `adsr` использует секунды для A/D/R и проценты для S.
+
+Исполняемый пример: `examples/lyra3/synth_engine.lyra`.
+
 ## Диагностика
 
 Ошибки высокоуровневого фронтенда теперь содержат путь исходного или

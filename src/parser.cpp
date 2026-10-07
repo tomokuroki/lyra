@@ -18,10 +18,17 @@ void Parser::parse(const std::string& source) {
     DrumKit trackDrumKit = DrumKit::Standard;
     double trackPan = 0.0;
     double trackAttack = -1.0;
+    double trackDecay = -1.0;
+    double trackSustain = -1.0;
     double trackRelease = -1.0;
     double trackCutoff = 0.0;
     double trackDrive = 0.0;
     double trackVol = 0.7;
+    std::vector<NoteEvent::Oscillator> trackOscillators;
+    int trackUnisonVoices = 1;
+    double trackUnisonDetune = 0.0;
+    double trackFmRatio = 0.0, trackFmAmount = 0.0;
+    double trackAmRate = 0.0, trackAmDepth = 0.0;
     double linearTime = 0.0;
     int activeTrack = -1;
     int activeBus = -1;
@@ -48,6 +55,17 @@ void Parser::parse(const std::string& source) {
     std::vector<LoopFrame> loopStack;
 
     auto addEvent = [&](NoteEvent ev) {
+        if (inTrack) {
+            ev.decay = trackDecay;
+            ev.sustain = trackSustain;
+            ev.oscillators = trackOscillators;
+            ev.unisonVoices = trackUnisonVoices;
+            ev.unisonDetuneCents = trackUnisonDetune;
+            ev.fmRatio = trackFmRatio;
+            ev.fmAmount = trackFmAmount;
+            ev.amRate = trackAmRate;
+            ev.amDepth = trackAmDepth;
+        }
         ev.trackId = activeTrack >= 0
             ? project.tracks[static_cast<size_t>(activeTrack)].id
             : globalTrack.id;
@@ -214,6 +232,58 @@ void Parser::parse(const std::string& source) {
                     trackDrive = value / 100.0;
                 }
             }
+            else if (cmd == "adsr") {
+                if (!inTrack) throw std::runtime_error("adsr can only be used inside a track");
+                double attack, decay, sustain, release;
+                if (!(ls >> attack >> decay >> sustain >> release) || attack < 0.0 || decay < 0.0 ||
+                    sustain < 0.0 || sustain > 100.0 || release < 0.0)
+                    throw std::runtime_error("usage: adsr <attack-sec> <decay-sec> <sustain-0-100> <release-sec>");
+                trackAttack = attack; trackDecay = decay;
+                trackSustain = sustain / 100.0; trackRelease = release;
+            }
+            else if (cmd == "osc" || cmd == "oscillator") {
+                if (!inTrack) throw std::runtime_error("osc can only be used inside a track");
+                std::string waveName;
+                if (!(ls >> waveName)) throw std::runtime_error("usage: osc <wave> [level=.. detune=.. semitones=..]");
+                NoteEvent::Oscillator oscillator;
+                oscillator.wave = parseWave(waveName);
+                trackInstrument = InstrumentType::Wave;
+                if (trackOscillators.empty()) trackWave = oscillator.wave;
+                std::string option;
+                while (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos) throw std::runtime_error("osc parameters use name=value");
+                    const std::string name = toLower(option.substr(0, equal));
+                    const double value = std::stod(option.substr(equal + 1));
+                    if (name == "level") oscillator.level = value / 100.0;
+                    else if (name == "detune") oscillator.detuneCents = value;
+                    else if (name == "semitones") oscillator.semitones = value;
+                    else throw std::runtime_error("unknown oscillator parameter: " + name);
+                }
+                if (oscillator.level < 0.0) throw std::runtime_error("osc level must be >= 0");
+                trackOscillators.push_back(oscillator);
+            }
+            else if (cmd == "unison") {
+                if (!inTrack) throw std::runtime_error("unison can only be used inside a track");
+                if (!(ls >> trackUnisonVoices) || (trackUnisonVoices != 1 && trackUnisonVoices != 2 &&
+                    trackUnisonVoices != 4 && trackUnisonVoices != 8 && trackUnisonVoices != 16))
+                    throw std::runtime_error("unison voices must be 1, 2, 4, 8, or 16");
+                std::string option;
+                if (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos || toLower(option.substr(0, equal)) != "detune")
+                        throw std::runtime_error("unison option must be detune=<cents>");
+                    trackUnisonDetune = std::stod(option.substr(equal + 1));
+                }
+            }
+            else if (cmd == "fm" || cmd == "am") {
+                if (!inTrack) throw std::runtime_error(cmd + " can only be used inside a track");
+                double first, second;
+                if (!(ls >> first >> second) || first < 0.0 || second < 0.0)
+                    throw std::runtime_error("usage: " + cmd + " <ratio-or-rate> <amount-or-depth>");
+                if (cmd == "fm") { trackFmRatio = first; trackFmAmount = second; }
+                else { trackAmRate = first; trackAmDepth = std::clamp(second / 100.0, 0.0, 1.0); }
+            }
             else if (cmd == "wave") {
                 std::string w;
                 if (!(ls >> w)) throw std::runtime_error("wave requires a type");
@@ -298,6 +368,28 @@ void Parser::parse(const std::string& source) {
                 if (!(ls >> bus >> amount) || amount < 0.0 || amount > 100.0)
                     throw std::runtime_error("usage: send <bus> <0-100>");
                 project.tracks[static_cast<size_t>(activeTrack)].sends.push_back(Send{bus, amount / 100.0});
+            }
+            else if (cmd == "sidechain") {
+                if (!inTrack || activeTrack < 0) throw std::runtime_error("sidechain can only be used inside a track");
+                Sidechain sidechain;
+                if (!(ls >> sidechain.sourceTrackId))
+                    throw std::runtime_error("usage: sidechain <source-track> [name=value ...]");
+                std::string option;
+                while (ls >> option) {
+                    const size_t equal = option.find('=');
+                    if (equal == std::string::npos || equal == 0 || equal + 1 >= option.size())
+                        throw std::runtime_error("sidechain parameters use name=value");
+                    const std::string name = toLower(option.substr(0, equal));
+                    const double value = std::stod(option.substr(equal + 1));
+                    if (!std::isfinite(value)) throw std::runtime_error("sidechain parameter must be finite");
+                    if (name == "amount") sidechain.amount = value / 100.0;
+                    else if (name == "threshold") sidechain.thresholdDb = value;
+                    else if (name == "ratio") sidechain.ratio = value;
+                    else if (name == "attack") sidechain.attackMs = value;
+                    else if (name == "release") sidechain.releaseMs = value;
+                    else throw std::runtime_error("unknown sidechain parameter: " + name);
+                }
+                project.tracks[static_cast<size_t>(activeTrack)].sidechains.push_back(sidechain);
             }
             else if (cmd == "automate") {
                 if (!inTrack || activeTrack < 0)
@@ -404,10 +496,16 @@ void Parser::parse(const std::string& source) {
                 trackDrumKit = config.drumKit;
                 trackPan = 0.0;
                 trackAttack = -1.0;
+                trackDecay = -1.0;
+                trackSustain = -1.0;
                 trackRelease = -1.0;
                 trackCutoff = 0.0;
                 trackDrive = 0.0;
                 trackVol = config.volume;
+                trackOscillators.clear();
+                trackUnisonVoices = 1; trackUnisonDetune = 0.0;
+                trackFmRatio = 0.0; trackFmAmount = 0.0;
+                trackAmRate = 0.0; trackAmDepth = 0.0;
             }
             else if (cmd == "endtrack" || (cmd == "}" && inTrack && loopStack.empty())) {
                 inTrack = false;

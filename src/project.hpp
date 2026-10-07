@@ -27,6 +27,15 @@ struct Send {
     double amount = 0.0;
 };
 
+struct Sidechain {
+    std::string sourceTrackId;
+    double amount = 1.0;
+    double thresholdDb = -18.0;
+    double ratio = 4.0;
+    double attackMs = 10.0;
+    double releaseMs = 120.0;
+};
+
 struct AutomationPoint {
     double beat = 0.0;
     double value = 0.0;
@@ -85,6 +94,7 @@ struct Track {
     MixerChannel mixer;
     std::vector<Effect> inserts;
     std::vector<Send> sends;
+    std::vector<Sidechain> sidechains;
     std::vector<NoteEvent> events;
 };
 

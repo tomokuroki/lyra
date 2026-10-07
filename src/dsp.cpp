@@ -109,4 +109,30 @@ void processEffectChain(AudioBuffer& audio, const std::vector<Effect>& effects, 
     for (const auto& effect : effects) processEffect(audio, effect, sampleRate);
 }
 
+void processSidechain(AudioBuffer& target, const AudioBuffer& key,
+                      const Sidechain& settings, int sampleRate) {
+    if (target.samples.empty() || key.samples.empty() || target.channels < 1 || key.channels < 1) return;
+    const size_t frames = std::min(target.samples.size() / static_cast<size_t>(target.channels),
+                                   key.samples.size() / static_cast<size_t>(key.channels));
+    const double threshold = std::pow(10.0, settings.thresholdDb / 20.0);
+    const double attack = std::exp(-1.0 / (settings.attackMs * 0.001 * sampleRate));
+    const double release = std::exp(-1.0 / (settings.releaseMs * 0.001 * sampleRate));
+    double envelope = 0.0;
+    for (size_t frame = 0; frame < frames; ++frame) {
+        double keyLevel = 0.0;
+        for (int channel = 0; channel < key.channels; ++channel)
+            keyLevel = std::max(keyLevel, std::fabs(static_cast<double>(key.samples[frame * key.channels + channel])));
+        const double coefficient = keyLevel > envelope ? attack : release;
+        envelope = coefficient * envelope + (1.0 - coefficient) * keyLevel;
+        double compressedGain = 1.0;
+        if (envelope > threshold && threshold > 0.0) {
+            const double over = envelope / threshold;
+            compressedGain = std::pow(over, -(1.0 - 1.0 / settings.ratio));
+        }
+        const double gain = 1.0 + (compressedGain - 1.0) * settings.amount;
+        for (int channel = 0; channel < target.channels; ++channel)
+            target.samples[frame * target.channels + channel] *= static_cast<float>(gain);
+    }
+}
+
 } // namespace lyra

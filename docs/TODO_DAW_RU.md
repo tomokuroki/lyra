@@ -23,13 +23,13 @@
 
 - [x] sine/square/saw/triangle/pulse/noise.
 - [ ] Формульный custom oscillator.
-- [ ] Multi-oscillator, detune и unison 2/4/8/16.
-- [~] FM sound mode; нужна настоящая матрица FM.
-- [ ] AM, wavetable и additive synthesis.
+- [x] Multi-oscillator, detune и unison 2/4/8/16.
+- [~] Настоящая FM ratio/index готова; нужна многооператорная FM matrix.
+- [~] AM готова; нужны wavetable и additive synthesis.
 - [~] Subtractive chain: oscillator/filter/amp есть частично.
 - [ ] Karplus–Strong и physical modeling.
 - [~] White noise есть; нужны pink/brown/blue.
-- [~] Envelope: attack/release есть; нужны decay/sustain.
+- [x] Полный ADSR: attack/decay/sustain/release.
 - [ ] Pitch/filter envelopes, LFO и modulation matrix.
 
 ## 3. Sampler и audio clips
@@ -58,7 +58,7 @@
 - [x] Именованные mixer channels, volume/gain, pan, mute/solo.
 - [x] Ordered insert FX chains на track/bus/master.
 - [x] Именованные buses и post-insert sends.
-- [ ] Sidechain и parallel processing.
+- [x] Sidechain compression и parallel processing через send buses.
 - [x] Master channel как отдельный routing node.
 - [~] Automation: volume/pan/cutoff/drive + linear/step.
 - [ ] Pitch/tempo/любые FX parameters + ease/Bezier.

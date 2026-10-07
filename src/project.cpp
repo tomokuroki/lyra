@@ -90,6 +90,14 @@ void Project::validate() const {
         for (const auto& send : track.sends)
             if (!busIds.count(send.busId) || send.amount < 0.0 || send.amount > 1.0)
                 throw std::runtime_error("Invalid send from " + track.name + " to " + send.busId);
+    for (const auto& track : tracks) {
+        for (const auto& sidechain : track.sidechains) {
+            if (!ids.count(sidechain.sourceTrackId) || sidechain.sourceTrackId == track.id ||
+                sidechain.amount < 0.0 || sidechain.amount > 1.0 ||
+                sidechain.ratio < 1.0 || sidechain.attackMs <= 0.0 || sidechain.releaseMs <= 0.0)
+                throw std::runtime_error("Invalid sidechain on track: " + track.name);
+        }
+    }
     for (const auto& lane : automation) {
         if (!ids.count(lane.trackId))
             throw std::runtime_error("Automation targets unknown track: " + lane.trackId);

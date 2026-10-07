@@ -329,6 +329,15 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
                 out << "{\"bus\": \"" << jsonEscape(project->tracks[i].sends[send].busId)
                     << "\", \"amount\": " << project->tracks[i].sends[send].amount << "}";
             }
+            out << "], \"sidechains\": [";
+            for (size_t route = 0; route < project->tracks[i].sidechains.size(); ++route) {
+                if (route) out << ", ";
+                const auto& sidechain = project->tracks[i].sidechains[route];
+                out << "{\"source\": \"" << jsonEscape(sidechain.sourceTrackId)
+                    << "\", \"amount\": " << sidechain.amount
+                    << ", \"threshold_db\": " << sidechain.thresholdDb
+                    << ", \"ratio\": " << sidechain.ratio << "}";
+            }
             out << "]}";
         }
         out << "]},\n";
@@ -352,9 +361,27 @@ static void writeJsonImpl(const std::string& filename, const std::vector<NoteEve
             << "\", \"drum_kit\": \"" << drumKitName(event.drumKit)
             << "\", \"pan\": " << event.pan
             << ", \"attack\": " << event.attack
+            << ", \"decay\": " << event.decay
+            << ", \"sustain\": " << event.sustain
             << ", \"release\": " << event.release
             << ", \"cutoff\": " << event.cutoff
-            << ", \"drive\": " << event.drive << "}";
+            << ", \"drive\": " << event.drive
+            << ", \"unison\": " << event.unisonVoices
+            << ", \"unison_detune_cents\": " << event.unisonDetuneCents
+            << ", \"fm_ratio\": " << event.fmRatio
+            << ", \"fm_amount\": " << event.fmAmount
+            << ", \"am_rate\": " << event.amRate
+            << ", \"am_depth\": " << event.amDepth
+            << ", \"oscillators\": [";
+        for (size_t oscillator = 0; oscillator < event.oscillators.size(); ++oscillator) {
+            if (oscillator) out << ", ";
+            const auto& spec = event.oscillators[oscillator];
+            out << "{\"wave\": \"" << waveToString(spec.wave)
+                << "\", \"level\": " << spec.level
+                << ", \"semitones\": " << spec.semitones
+                << ", \"detune_cents\": " << spec.detuneCents << "}";
+        }
+        out << "]}";
         if (i + 1 != events.size()) out << ',';
         out << '\n';
     }

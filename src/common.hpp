@@ -104,9 +104,24 @@ struct NoteEvent {
     DrumKit drumKit = DrumKit::Standard;
     double pan = 0.0;
     double attack = -1.0;
+    double decay = -1.0;
+    double sustain = -1.0;
     double release = -1.0;
     double cutoff = 0.0;
     double drive = 0.0;
+    struct Oscillator {
+        WaveType wave = WaveType::Sine;
+        double level = 1.0;
+        double semitones = 0.0;
+        double detuneCents = 0.0;
+    };
+    std::vector<Oscillator> oscillators;
+    int unisonVoices = 1;
+    double unisonDetuneCents = 0.0;
+    double fmRatio = 0.0;
+    double fmAmount = 0.0;
+    double amRate = 0.0;
+    double amDepth = 0.0;
 };
 
 struct AudioBuffer {

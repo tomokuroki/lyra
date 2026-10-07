@@ -26,6 +26,16 @@ track lead {
   chord C4 E4 G4 C5 1
 }
 
+track bass {
+  wave square
+  fx lowpass cutoff=450 wet=100
+  sidechain drums amount=100 threshold=-30 ratio=8 attack=2 release=180
+  note C2 1
+  note C2 1
+  note G1 1
+  note C2 1
+}
+
 track drums {
   fx bitcrusher bits=10 rate=22050 wet=20
   kick 0.5
